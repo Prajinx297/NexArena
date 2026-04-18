@@ -145,10 +145,10 @@ export function DashboardPage() {
   if (loading && !crowdData && !waitTimes) return <DashboardSkeleton />;
 
   const crowdChartData = crowdData ? [
-    { name: 'North', value: crowdData.north, color: '#06b6d4' },
-    { name: 'East', value: crowdData.east, color: '#3b82f6' },
-    { name: 'South', value: crowdData.south, color: '#6366f1' },
-    { name: 'West', value: crowdData.west, color: '#64748b' },
+    { name: 'North', value: crowdData['Gate A (North)'], color: '#06b6d4' },
+    { name: 'East', value: crowdData['Gate C (East)'], color: '#3b82f6' },
+    { name: 'South', value: crowdData['Gate E (South)'], color: '#6366f1' },
+    { name: 'West', value: crowdData['Gate G (West)'], color: '#64748b' },
   ] : [];
 
   const waitChartData = waitTimes ? Object.entries(waitTimes).map(([name, value]) => ({
@@ -255,8 +255,8 @@ export function DashboardPage() {
           ) : <div className="h-[220px] flex items-center justify-center text-slate-500 italic">Syncing live data...</div>}
           {crowdData && (
             <p className="text-xs text-slate-400 mt-2">
-              {crowdData.east > 75 ? '⚠️ East Gate showing elevated crowd. Allow extra time.' :
-               crowdData.north > 75 ? '⚠️ North Gate congested. Consider alternate entry.' :
+              {crowdData['Gate C (East)'] > 75 ? '⚠️ East Gate showing elevated crowd. Allow extra time.' :
+               crowdData['Gate A (North)'] > 75 ? '⚠️ North Gate congested. Consider alternate entry.' :
                '✅ All gates at normal capacity.'}
             </p>
           )}

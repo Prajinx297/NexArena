@@ -230,25 +230,22 @@ export function HostDashboardPage() {
     if (wsData?.heat_map) {
       const hm = wsData.heat_map;
       setDensities(prev => ({
-        north: hm.north ?? prev.north,
-        east: hm.east ?? prev.east,
-        south: hm.south ?? prev.south,
-        west: hm.west ?? prev.west,
+        north: hm['Gate A (North)'] ?? prev.north,
+        east: hm['Gate C (East)'] ?? prev.east,
+        south: hm['Gate E (South)'] ?? prev.south,
+        west: hm['Gate G (West)'] ?? prev.west,
         vip: Math.floor(Math.random() * 30 + 20),
         parking: Math.floor(Math.random() * 40 + 30),
       }));
     }
   }, [wsData]);
 
-  // Update chart data periodically
+  // Update chart data whenever densities change
   useEffect(() => {
-    const interval = setInterval(() => {
-      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const point = { time, ...densities };
-      historyRef.current = [...historyRef.current.slice(-9), point];
-      setChartData([...historyRef.current]);
-    }, 3000);
-    return () => clearInterval(interval);
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const point = { time, ...densities };
+    historyRef.current = [...historyRef.current.slice(-9), point];
+    setChartData([...historyRef.current]);
   }, [densities]);
 
   // Also update densities on interval for non-WS zones

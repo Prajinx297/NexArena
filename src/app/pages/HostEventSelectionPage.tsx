@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
@@ -58,7 +59,7 @@ export function HostEventSelectionPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event, idx) => (
+            {events.map((event: Event, idx: number) => (
               <motion.div
                 key={event.id}
                 initial={{ opacity: 0, y: 20 }}
