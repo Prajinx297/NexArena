@@ -106,13 +106,22 @@ class Database:
             return ticket
         return None
 
-    def ensure_user(self, uid: str, email: Optional[str] = None):
+    def ensure_user(self, uid: str, email: Optional[str] = None, role: Optional[str] = None):
         user_ref = self.db.collection("users").document(uid)
         doc = user_ref.get()
         if doc.exists:
             user = doc.to_dict()
+            if role and role != user.get("role"):
+                user["role"] = role
+                updates = {"role": role}
+                if role == "host" and not user.get("assignedEvents"):
+                    user["assignedEvents"] = ["*"]
+                    updates["assignedEvents"] = ["*"]
+                user_ref.update(updates)
         else:
-            user = {"uid": uid, "email": email, "role": "fan", "assignedEvents": []}
+            final_role = role or "fan"
+            assigned_events = ["*"] if final_role == "host" else []
+            user = {"uid": uid, "email": email, "role": final_role, "assignedEvents": assigned_events}
             user_ref.set(user)
         user["uid"] = uid
         return user

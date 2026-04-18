@@ -25,14 +25,7 @@ export function LoginPage() {
 
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      const resolvedRole = await refreshUserRole(credential.user);
-
-      if (role === "host" && resolvedRole !== "host") {
-        await logout();
-        setError("Access denied. This account is not registered as a host.");
-        setLoading(false);
-        return;
-      }
+      const resolvedRole = await refreshUserRole(credential.user, role);
 
       localStorage.setItem("userEmail", email);
       showToast("Login successful! Redirecting...", "success");

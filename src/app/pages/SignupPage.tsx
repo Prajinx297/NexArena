@@ -5,6 +5,7 @@ import { Shield, User, Loader2 } from "lucide-react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { Navbar } from "../components/Navbar";
+import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../context/ToastContext";
 
 export function SignupPage() {
@@ -16,6 +17,7 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { refreshUserRole } = useAuth();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,15 +34,17 @@ export function SignupPage() {
 
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      const resolvedRole = await refreshUserRole(credential.user, role);
+      
       localStorage.setItem("userEmail", email);
       showToast("Account created successfully!", "success");
 
       setTimeout(() => {
-        if (role === "host") {
-          navigate("/host");
+        if (resolvedRole === "host") {
+          navigate("/host/events", { replace: true });
         } else {
-          navigate("/events");
+          navigate("/events", { replace: true });
         }
       }, 600);
     } catch (err: any) {

@@ -205,8 +205,8 @@ def verify_host_route(request: Request, req: VerifyHostRequest):
 
 
 @router.get("/me")
-def me(uid: str = Depends(get_current_uid)):
-    user = db.ensure_user(uid)
+def me(role: Optional[str] = None, uid: str = Depends(get_current_uid)):
+    user = db.ensure_user(uid, role=role)
     return {"role": user.get("role", "fan"), "assignedEvents": user.get("assignedEvents", [])}
 
 

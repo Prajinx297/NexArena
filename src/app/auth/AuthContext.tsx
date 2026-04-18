@@ -10,7 +10,7 @@ interface AuthContextType {
   loading: boolean;
   role: "fan" | "host" | null;
   assignedEvents: string[];
-  refreshUserRole: (user?: User | null) => Promise<"fan" | "host">;
+  refreshUserRole: (user?: User | null, initialRole?: string) => Promise<"fan" | "host">;
   logout: () => Promise<void>;
 }
 
@@ -26,23 +26,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<"fan" | "host" | null>(null);
   const [assignedEvents, setAssignedEvents] = useState<string[]>([]);
 
-  const refreshUserRole = async (targetUser: User | null = currentUser): Promise<"fan" | "host"> => {
+  const refreshUserRole = async (targetUser: User | null = currentUser, initialRole?: string): Promise<"fan" | "host"> => {
     if (!targetUser) {
       setRole(null);
       setAssignedEvents([]);
       return "fan";
     }
 
-    const token = await targetUser.getIdToken(true);
-    const response = await axios.get(`${API_BASE_URL}/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const nextRole = response.data.role === "host" ? "host" : "fan";
-    setRole(nextRole);
-    setAssignedEvents(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []);
-    localStorage.setItem("nexarena-role", nextRole);
-    localStorage.setItem("nexarena-assigned-events", JSON.stringify(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []));
-    return nextRole;
+    try {
+      const token = await targetUser.getIdToken(true);
+      const response = await axios.get(`${API_BASE_URL}/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: initialRole ? { role: initialRole } : {},
+      });
+      const nextRole = response.data.role === "host" ? "host" : "fan";
+      setRole(nextRole);
+      setAssignedEvents(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []);
+      localStorage.setItem("nexarena-role", nextRole);
+      localStorage.setItem("nexarena-assigned-events", JSON.stringify(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []));
+      return nextRole;
+    } catch (err) {
+      console.warn("Backend /me call failed, using fallback role:", err);
+      // Fallback to local state / provided role
+      const fallbackRole: "fan" | "host" = initialRole === "host" 
+        ? "host" 
+        : (localStorage.getItem("nexarena-role") === "host" ? "host" : "fan");
+      
+      setRole(fallbackRole);
+      localStorage.setItem("nexarena-role", fallbackRole);
+      return fallbackRole;
+    }
   };
 
   useEffect(() => {
