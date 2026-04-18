@@ -1,30 +1,33 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { MessageCircle, X, Send, Bot } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Bot, MessageCircle, Send, X } from "lucide-react";
+import axios from "axios";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Message {
   id: number;
   text: string;
-  sender: 'user' | 'bot';
+  sender: "user" | "bot";
 }
 
-const responses: Record<string, string> = {
-  crowd: '📊 Current crowd density: North Gate 45%, East Gate 72%, South Gate 38%, West Gate 61%. East Gate is the busiest — we recommend using the South entrance.',
-  wait: '⏱️ Wait times: Gate A — 3 min, Gate B — 8 min, Gate C — 2 min, Gate D — 12 min. Gate C currently has the shortest wait.',
-  seat: '💺 Your seat is in Section A, Row 12. From the North Gate, follow the blue signs to Staircase 3, then proceed to Level 2.',
-  exit: '🚪 The nearest exit from your section is the North Gate Emergency Exit (45m away). Alternative: West Gate Side Exit (65m).',
-  food: '🍔 Nearest food court is at Level 1, Concession Stand C — currently 4 min wait. Pizza and burgers available.',
-  help: '🤖 I can help with:\n• "crowd" — live crowd density\n• "wait" — wait time estimates\n• "seat" — find your seat\n• "exit" — nearest exit\n• "food" — food court info\n\nJust type a keyword!',
-};
+interface ChatbotWidgetProps {
+  eventId?: string;
+}
 
+const quickReplies = ["Best gate now?", "Any alerts?", "Shortest food queue?"];
 let msgId = 0;
 
-export function ChatbotWidget() {
+export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { id: ++msgId, text: 'Hey there! 👋 I\'m the NexArena AI Assistant. Type "help" to see what I can do!', sender: 'bot' },
+    {
+      id: ++msgId,
+      text: "I’m NexBot. Ask about gates, alerts, or food queues and I’ll use live stadium context.",
+      sender: "bot",
+    },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -34,117 +37,133 @@ export function ChatbotWidget() {
     }
   }, [messages, typing]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
 
-    const userMsg: Message = { id: ++msgId, text: input, sender: 'user' };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
+    setMessages((current) => [...current, { id: ++msgId, text: trimmed, sender: "user" }]);
+    setInput("");
     setTyping(true);
 
-    setTimeout(() => {
-      const keyword = Object.keys(responses).find((k) => input.toLowerCase().includes(k));
-      const reply = keyword
-        ? responses[keyword]
-        : "🤔 I'm not sure about that. Try typing \"help\" to see available commands!";
-      setMessages((prev) => [...prev, { id: ++msgId, text: reply, sender: 'bot' }]);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/chat`, { event_id: eventId, message: trimmed });
+      setMessages((current) => [...current, { id: ++msgId, text: response.data.answer, sender: "bot" }]);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        {
+          id: ++msgId,
+          text: "I couldn’t reach live context right now. Try again in a moment.",
+          sender: "bot",
+        },
+      ]);
+    } finally {
       setTyping(false);
-    }, 1200);
+    }
   };
 
   return (
     <>
-      {/* Floating Button */}
       <AnimatePresence>
-        {!isOpen && (
+        {!isOpen ? (
           <motion.button
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-[150] w-14 h-14 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] transition-shadow"
+            className="fixed bottom-6 right-6 z-[150] flex h-14 w-14 items-center justify-center rounded-full bg-sky-300 text-slate-950 shadow-[0_0_34px_rgba(56,189,248,0.42)] transition hover:brightness-110"
           >
-            <MessageCircle className="w-6 h-6" />
+            <MessageCircle className="h-6 w-6" />
           </motion.button>
-        )}
+        ) : null}
       </AnimatePresence>
 
-      {/* Chat Panel */}
       <AnimatePresence>
-        {isOpen && (
+        {isOpen ? (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-[150] w-[380px] h-[520px] bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            className="fixed bottom-6 right-6 z-[150] flex h-[540px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5">
+            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-5 py-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-cyan-500/20 flex items-center justify-center">
-                  <Bot className="w-5 h-5 text-cyan-400" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-300/15">
+                  <Bot className="h-5 w-5 text-sky-200" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">NexArena AI Assistant</h3>
-                  <p className="text-[10px] text-cyan-400 font-medium">Beta • Powered by NexArena AI</p>
+                  <h3 className="text-sm font-bold text-white">NexBot</h3>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-sky-200">Live context</p>
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
+              <button onClick={() => setIsOpen(false)} className="rounded-xl p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg) => (
+            <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+              {messages.map((message) => (
                 <motion.div
-                  key={msg.id}
+                  key={message.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm whitespace-pre-line ${
-                    msg.sender === 'user'
-                      ? 'bg-cyan-500 text-slate-950 font-medium rounded-br-md'
-                      : 'bg-white/10 text-slate-200 rounded-bl-md'
-                  }`}>
-                    {msg.text}
+                  <div
+                    className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-6 ${
+                      message.sender === "user"
+                        ? "rounded-br-md bg-sky-300 font-medium text-slate-950"
+                        : "rounded-bl-md bg-white/10 text-slate-200"
+                    }`}
+                  >
+                    {message.text}
                   </div>
                 </motion.div>
               ))}
 
-              {typing && (
+              {typing ? (
                 <div className="flex justify-start">
-                  <div className="bg-white/10 px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-1.5">
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-white/10 px-4 py-3">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:150ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
-            {/* Input */}
+            <div className="flex flex-wrap gap-2 border-t border-white/10 bg-white/[0.04] px-3 py-3">
+              {quickReplies.map((reply) => (
+                <button
+                  key={reply}
+                  onClick={() => sendMessage(reply)}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-white/10"
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
+
             <form
-              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-              className="flex items-center gap-2 p-3 border-t border-white/10 bg-white/5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                sendMessage(input);
+              }}
+              className="flex items-center gap-2 border-t border-white/10 bg-white/[0.04] p-3"
             >
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder='Try "crowd", "wait", or "help"'
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask NexBot..."
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-300/50"
               />
-              <button
-                type="submit"
-                className="p-2.5 bg-cyan-500 hover:bg-cyan-400 rounded-xl text-slate-950 transition-colors"
-              >
-                <Send className="w-4 h-4" />
+              <button type="submit" className="rounded-xl bg-sky-300 p-2.5 text-slate-950 transition hover:brightness-110">
+                <Send className="h-4 w-4" />
               </button>
             </form>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
     </>
   );

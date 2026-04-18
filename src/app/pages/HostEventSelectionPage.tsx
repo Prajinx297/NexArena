@@ -33,19 +33,19 @@ export function HostEventSelectionPage() {
 
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="min-h-screen font-sans" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-24">
         {/* Header */}
         <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 mb-6">
             <Shield className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Staff Portal</span>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>Staff Portal</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">
-            NexArena <span className="text-cyan-400">Command Center</span>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4" style={{ color: "var(--text-primary)" }}>
+            NexArena <span style={{ color: "var(--accent)" }}>Command Center</span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto">Select an event to access security monitoring, crowd analytics, and broadcast tools.</p>
+          <p className="text-lg max-w-xl mx-auto" style={{ color: "var(--text-secondary)" }}>Select an event to access security monitoring, crowd analytics, and broadcast tools.</p>
         </div>
 
         {fetchError && <ErrorBanner message={fetchError} onRetry={fetchEvents} />}
@@ -54,7 +54,7 @@ export function HostEventSelectionPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-6 h-72"><LoadingSkeleton lines={5} /></div>
+              <div key={i} className="rounded-2xl border p-6 h-72" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}><LoadingSkeleton lines={5} /></div>
             ))}
           </div>
         ) : (
@@ -66,8 +66,9 @@ export function HostEventSelectionPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
                 whileHover={{ y: -4 }}
-                onClick={() => navigate(`/host/${event.id}`)}
-                className="bg-white/5 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 hover:border-cyan-500/30 transition-all cursor-pointer group"
+                onClick={() => navigate(`/host-dashboard/${event.id}`)}
+                className="rounded-2xl overflow-hidden border transition-all cursor-pointer group shadow-[0_18px_60px_rgba(15,23,42,0.10)]"
+                style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
               >
                 <div className="h-40 overflow-hidden relative">
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent z-10" />
@@ -84,8 +85,8 @@ export function HostEventSelectionPage() {
                   </div>
                 </div>
                 <div className="p-5">
-                  <h3 className="text-lg font-bold text-white mb-3">{event.name}</h3>
-                  <div className="space-y-2 text-sm text-slate-400">
+                  <h3 className="text-lg font-bold mb-3" style={{ color: "var(--text-primary)" }}>{event.name}</h3>
+                  <div className="space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
                     <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-slate-500" />{event.stadium}, {event.city}</p>
                     <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" />{event.date}</p>
                   </div>

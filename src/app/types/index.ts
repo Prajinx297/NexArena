@@ -25,6 +25,9 @@ export interface Alert {
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   timestamp: string;
   zone?: string;
+  type?: string;
+  velocity?: number;
+  eta_to_critical_seconds?: number;
 }
 
 export interface Host {
@@ -54,3 +57,28 @@ export interface Recommendation {
 export type ThemeMode = 'dark' | 'light';
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected' | 'error';
+
+export interface LiveStadiumState {
+  type: string;
+  event_id: string;
+  heat_map: Record<string, number>;
+  densities: Record<string, number>;
+  wait_times: Record<string, number>;
+  concessions: {
+    hot_dogs: number;
+    drinks: number;
+    merch: number;
+  };
+  surge_warning?: Alert | null;
+  timestamp: string;
+}
+
+export interface UserProfile {
+  role: 'fan' | 'host';
+  assignedEvents: string[];
+}
+
+export interface UserPreferences {
+  notifications: boolean;
+  sound: boolean;
+}

@@ -1,136 +1,172 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router";
-import { motion } from "motion/react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, RefreshCw, Settings, Ticket, TrendingUp, Wifi } from "lucide-react";
+import axios from "axios";
+import { Link, useNavigate, useParams } from "react-router";
 import { Navbar } from "../components/Navbar";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { DashboardSkeleton } from "../components/LoadingSkeleton";
-import { useWebSocket } from "../hooks/useWebSocket";
+import {
+  AlertsTicker,
+  FanHero,
+  FriendFinderCard,
+  LiveAnalyticsRow,
+  FoodOrderingCard,
+  OrderConfirmationCard,
+  StadiumMapCard,
+  buildFanZones,
+  createFallbackFriendResult,
+  deriveFanRecommendation,
+  type FanZone,
+} from "../components/dashboard/FanDashboardSections";
+import { DashboardShell, GlassPanel, SectionIntro } from "../components/dashboard/DashboardPrimitives";
+import { ConcessionPanel } from "../components/ConcessionPanel";
+import { GateDensityRing } from "../components/GateDensityRing";
+import { JourneyTimeline, type JourneyEvent } from "../components/JourneyTimeline";
+import { OnboardingTour } from "../components/OnboardingTour";
+import { PreferencesDrawer } from "../components/PreferencesDrawer";
+import { StadiumMap } from "../components/StadiumMap";
 import { useToast } from "../context/ToastContext";
-import { ArrowLeft, RefreshCw, Ticket, MapPin, Activity, Clock, ArrowRight, Map as MapIcon, Camera, TrendingUp, Bell, AlertTriangle } from "lucide-react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from "recharts";
-import axios from "axios";
+import { useWebSocket } from "../hooks/useWebSocket";
+import type { Alert, Event, LiveStadiumState, UserPreferences } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL;
 
-/* ═══════ Activity Log ═══════ */
-function ActivityLog({ entries }: { entries: string[] }) {
-  return (
-    <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 h-full">
-      <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-        <Clock className="w-4 h-4 text-cyan-400" />Session Activity
-      </h3>
-      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-        {entries.map((e, i) => (
-          <div key={i} className="text-xs text-slate-400 flex items-start gap-2 py-1 border-b border-white/5 last:border-0">
-            <span className="text-slate-600 font-mono shrink-0">{e.split(' — ')[0]}</span>
-            <span>{e.split(' — ')[1]}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+interface RecommendationResponse {
+  recommended_gate?: string;
+  instruction?: string;
 }
 
-/* ═══════ ML Prediction Panel ═══════ */
-function MLPredictionPanel() {
-  const [data] = useState(() =>
-    Array.from({ length: 7 }, (_, i) => ({
-      time: `+${(i + 1) * 5}m`,
-      predicted: Math.floor(Math.random() * 30 + 40),
-    }))
-  );
-  return (
-    <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden">
-      <div className="absolute top-3 right-3 px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded text-[9px] font-bold text-purple-400 uppercase">Beta</div>
-      <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-purple-400" />ML Wait Prediction
-      </h3>
-      <p className="text-[10px] text-slate-500 mb-3">30-minute forecast • Experimental</p>
-      <div className="h-[120px] -ml-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} tickLine={false} />
-            <YAxis hide domain={[0, 100]} />
-            <Line type="monotone" dataKey="predicted" stroke="#8b5cf6" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="text-[10px] text-slate-600 italic mt-1">Predictions improve with more event data.</p>
-    </div>
-  );
+interface TicketInfo {
+  id: string;
+  seat: string;
+  gate: string;
+  status: string;
 }
 
-/* ═══════ DASHBOARD PAGE ═══════ */
+const defaultAlerts: Alert[] = [
+  {
+    id: "fallback-1",
+    title: "Ingress update: Gate B currently fastest for general admission",
+    description: "AI routing has shifted the recommendation due to lower queue pressure on the east side.",
+    severity: "info",
+    timestamp: new Date().toISOString(),
+  },
+  {
+    id: "fallback-2",
+    title: "Food pickup lanes active in North Concourse",
+    description: "Order ahead to skip the queue and collect at Bay 2.",
+    severity: "low",
+    timestamp: new Date().toISOString(),
+  },
+];
+
+function createTicket(eventId: string): TicketInfo {
+  const suffix = eventId.slice(-4).toUpperCase().padEnd(4, "X");
+  return {
+    id: `NX-${suffix}-A12`,
+    seat: "Section B, Row 12, Seat 4",
+    gate: "Gate B",
+    status: "active",
+  };
+}
+
 export function DashboardPage() {
-  const { eventId } = useParams();
+  const { eventId = "" } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [waitTimes, setWaitTimes] = useState<Record<string, number> | null>(null);
-  const [recommendation, setRecommendation] = useState<any>(null);
-  const [eventDetails, setEventDetails] = useState<any>(null);
-  const [crowdData, setCrowdData] = useState<any>(null);
+  const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [eventDetails, setEventDetails] = useState<Event | null>(null);
+  const [crowdData, setCrowdData] = useState<Record<string, number> | null>(null);
+  const [concessions, setConcessions] = useState<LiveStadiumState["concessions"] | undefined>();
+  const [surgeWarning, setSurgeWarning] = useState<Alert | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [readAlerts, setReadAlerts] = useState<Set<string>>(new Set());
-  const activityLog = useRef<string[]>([]);
-  const [logEntries, setLogEntries] = useState<string[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [ticket, setTicket] = useState<TicketInfo>(() => createTicket(eventId));
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [friendResult, setFriendResult] = useState<{
+    name: string;
+    ticketId: string;
+    zoneId: string;
+    locationLabel: string;
+    status: string;
+  } | null>(null);
+  const [orderState, setOrderState] = useState<{ eta: number; pickup: string; itemCount: number } | null>(null);
+  const [tourRestart, setTourRestart] = useState(0);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [preferences, setPreferences] = useState<UserPreferences>({ notifications: true, sound: false });
+  const [timelineEvents, setTimelineEvents] = useState<JourneyEvent[]>(() => [
+    {
+      id: `entered-${eventId}`,
+      label: "Dashboard entered",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      tone: "blue",
+    },
+  ]);
 
-  const addLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const entry = `${time} — ${msg}`;
-    activityLog.current = [entry, ...activityLog.current].slice(0, 20);
-    setLogEntries([...activityLog.current]);
-  };
-
-  // WebSocket for crowd data
-  const { data: wsData, status: wsStatus } = useWebSocket<any>(`${WS_BASE_URL}/crowd/${eventId}`);
+  const { data: wsData, status: wsStatus } = useWebSocket<LiveStadiumState>(`${WS_BASE_URL}/crowd/${eventId}`);
 
   useEffect(() => {
     if (wsData?.heat_map) {
       setCrowdData(wsData.heat_map);
+      setWaitTimes(wsData.wait_times ?? null);
+      setConcessions(wsData.concessions);
+      if (wsData.surge_warning) {
+        setSurgeWarning(wsData.surge_warning);
+        setAlerts((current) => [wsData.surge_warning as Alert, ...current.filter((alert) => alert.id !== wsData.surge_warning?.id)].slice(0, 8));
+        setTimelineEvents((current) => [
+          {
+            id: `surge-${wsData.surge_warning?.zone}-${wsData.timestamp}`,
+            label: wsData.surge_warning?.title ?? "Surge warning received",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            tone: "amber",
+          },
+          ...current,
+        ]);
+      }
     }
   }, [wsData]);
 
   useEffect(() => {
-    if (wsStatus === 'connected') addLog('Connected to live feed');
-  }, [wsStatus]);
-
-  // Stateless mock ticket injection
-  const [currentTicket, setCurrentTicket] = useState<any>(null);
-  useEffect(() => {
-    if (eventId) {
-      setCurrentTicket({
-        id: `TKT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        seat: "Section B, Row 12, Seat 4",
-        gate: "Gate D",
-        event_id: eventId,
-        status: "active"
-      });
-      addLog('Pass synced successfully');
-    }
+    setTicket(createTicket(eventId));
   }, [eventId]);
 
   const fetchData = async () => {
     setFetchError(null);
+
     try {
-      const [waitRes, recRes, eventsRes, alertsRes] = await Promise.all([
+      const [waitResponse, recommendResponse, eventsResponse, alertsResponse] = await Promise.all([
         axios.get(`${API_BASE_URL}/wait-time/${eventId}`),
         axios.get(`${API_BASE_URL}/recommend/${eventId}`),
         axios.get(`${API_BASE_URL}/events`),
-        axios.get(`${API_BASE_URL}/alerts`),
+        axios.get(`${API_BASE_URL}/alerts`, { params: { event_id: eventId } }),
       ]);
-      setWaitTimes(waitRes.data.wait_times);
-      setRecommendation(recRes.data.recommendation);
-      setAlerts(alertsRes.data.alerts || []);
-      const event = eventsRes.data.events.find((e: any) => e.id === eventId);
-      setEventDetails(event);
-    } catch (err: any) {
-      setFetchError(err.message || "Failed to load dashboard data");
+
+      setWaitTimes(waitResponse.data.wait_times ?? null);
+      setRecommendation(recommendResponse.data.recommendation ?? null);
+      const nextAlerts = alertsResponse.data.alerts ?? [];
+      setAlerts(nextAlerts);
+      if (nextAlerts.length) {
+        setTimelineEvents((current) => [
+          {
+            id: `alerts-${nextAlerts[0].id}-${Date.now()}`,
+            label: `Alert received: ${nextAlerts[0].title}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            tone: nextAlerts[0].type === "surge" ? "amber" : "red",
+          },
+          ...current,
+        ]);
+      }
+
+      const matchedEvent = (eventsResponse.data.events ?? []).find((event: Event) => event.id === eventId) ?? null;
+      setEventDetails(matchedEvent);
+    } catch (error: any) {
+      setFetchError(error?.message ?? "Failed to load live dashboard data.");
     } finally {
       setLoading(false);
     }
@@ -138,233 +174,266 @@ export function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 8000);
-    return () => clearInterval(interval);
+    const intervalId = window.setInterval(fetchData, 9000);
+    return () => window.clearInterval(intervalId);
   }, [eventId]);
 
-  if (loading && !crowdData && !waitTimes) return <DashboardSkeleton />;
+  const zones = buildFanZones(waitTimes, crowdData);
+  const bestGate = zones
+    .filter((zone) => zone.kind === "gate")
+    .sort((left, right) => left.wait - right.wait)[0] ?? null;
+  const displayedAlerts = alerts.length ? alerts : defaultAlerts;
+  const densitySource = wsData?.densities ?? crowdData ?? {};
+  const waitSource = wsData?.wait_times ?? waitTimes ?? {};
+  const averageWait = zones.length
+    ? Math.round(zones.reduce((sum, zone) => sum + zone.wait, 0) / zones.length)
+    : 0;
+  const overallCrowd = zones.length
+    ? Math.round(zones.reduce((sum, zone) => sum + zone.crowd, 0) / zones.length)
+    : 0;
+  const aiMessage =
+    recommendation?.instruction ?? deriveFanRecommendation(bestGate, ticket.gate);
 
-  const crowdChartData = crowdData ? [
-    { name: 'North', value: crowdData['Gate A (North)'], color: '#06b6d4' },
-    { name: 'East', value: crowdData['Gate C (East)'], color: '#3b82f6' },
-    { name: 'South', value: crowdData['Gate E (South)'], color: '#6366f1' },
-    { name: 'West', value: crowdData['Gate G (West)'], color: '#64748b' },
-  ] : [];
+  useEffect(() => {
+    if (!bestGate) return;
+    setTimelineEvents((current) => [
+      {
+        id: `rec-${bestGate.id}-${bestGate.wait}`,
+        label: `AI recommends ${bestGate.name} (${bestGate.wait} min)`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        tone: "emerald",
+      },
+      ...current,
+    ]);
+  }, [bestGate?.id, bestGate?.wait]);
 
-  const waitChartData = waitTimes ? Object.entries(waitTimes).map(([name, value]) => ({
-    name, value, color: value > 15 ? '#ef4444' : value > 5 ? '#eab308' : '#22c55e'
-  })) : [];
+  useEffect(() => {
+    if (!selectedZoneId && zones.length) {
+      setSelectedZoneId(bestGate?.id ?? zones[0].id);
+    }
+  }, [bestGate, selectedZoneId, zones]);
 
-  const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
+  useEffect(() => {
+    if (!friendResult && zones.length) {
+      setFriendResult(createFallbackFriendResult(zones[1] ?? zones[0]));
+    }
+  }, [friendResult, zones]);
+
+  if (loading && !eventDetails && !crowdData && !waitTimes) {
+    return <DashboardSkeleton />;
+  }
+
+  const eventSummary = {
+    name: eventDetails?.name ?? "Championship Night",
+    stadium: eventDetails?.stadium ?? "NexArena Stadium",
+    city: eventDetails?.city ?? "Smart City",
+    date: eventDetails?.date ?? "Tonight",
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30">
+    <DashboardShell>
       <Navbar />
 
-      {/* Top Header */}
-      <div className="relative pt-24 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate("/my-tickets")}
-              className="flex items-center justify-center w-10 h-10 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-400 hover:text-cyan-400 transition-all">
-              <ArrowLeft className="w-5 h-5" />
+      <div className="mx-auto flex w-full max-w-[1540px] flex-col gap-6 px-4 pb-20 pt-24 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/events")}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-                {eventDetails?.stadium || "Stadium"} Hub
-              </h1>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative rounded-full h-2 w-2 bg-red-500" />
-                </span>
-                <p className="text-sm text-slate-400">{eventDetails?.name || "Live Experience"}</p>
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-app-muted">
+                <Link to="/" className="hover:text-white">Home</Link>
+                <span>&gt;</span>
+                <Link to="/events" className="hover:text-white">Events</Link>
+                <span>&gt;</span>
+                <button onClick={() => navigate(`/dashboard/${eventId}`)} className="hover:text-white">
+                  {eventSummary.name}
+                </button>
               </div>
+              <p className="text-xs uppercase tracking-[0.28em] text-app-muted">Premium fan UI</p>
+              <p className="mt-1 text-sm text-slate-300">Built for live wayfinding, food, and social coordination.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex flex-wrap items-center gap-3">
             <ConnectionStatus status={wsStatus} />
-            <button onClick={() => { fetchData(); showToast("Dashboard refreshed", "info"); }}
-              className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-slate-400 hover:text-white transition-colors">
-              <RefreshCw className="w-4 h-4" />
+            <button
+              onClick={() => {
+                fetchData();
+                showToast("Live dashboard refreshed", "info");
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </button>
+            <button
+              onClick={() => setTourRestart((value) => value + 1)}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+            >
+              ? Restart tour
+            </button>
+            <button
+              onClick={() => setPreferencesOpen(true)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+            >
+              <Settings className="h-4 w-4" />
+              Preferences
             </button>
           </div>
         </div>
 
-        {/* Ticket Banner */}
-        {currentTicket && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="mt-6 bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/20 rounded-2xl p-5">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Ticket className="w-5 h-5 text-blue-400" />
-                <span className="text-sm text-blue-300 font-medium">ID: <span className="font-mono text-cyan-300">{currentTicket.id}</span></span>
+        {fetchError ? <ErrorBanner message={fetchError} onRetry={fetchData} /> : null}
+
+        <FanHero
+          event={eventSummary}
+          ticket={ticket}
+          bestGate={bestGate}
+          onRefresh={() => {
+            fetchData();
+            showToast("Route recommendations updated", "success");
+          }}
+        />
+
+        <AlertsTicker alerts={displayedAlerts} />
+
+        <LiveAnalyticsRow
+          bestGate={bestGate}
+          recommendation={aiMessage}
+          overallCrowd={overallCrowd}
+          averageWait={averageWait}
+        />
+
+        {surgeWarning ? (
+          <GlassPanel className="border-amber-300/25 bg-amber-300/10" glow="amber">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl border border-amber-300/30 bg-amber-300/15 p-3">
+                  <TrendingUp className="h-6 w-6 text-amber-200" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.28em] text-amber-100">Predictive surge detector</p>
+                  <p className="mt-2 font-display text-2xl font-semibold text-white">{surgeWarning.title}</p>
+                  <p className="mt-2 text-sm text-slate-200">{surgeWarning.description}</p>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Velocity</p>
+                <p className="font-display text-2xl font-semibold text-white">+{surgeWarning.velocity ?? 0}%/tick</p>
+              </div>
+            </div>
+          </GlassPanel>
+        ) : null}
+
+        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.55fr]">
+          <GlassPanel className="space-y-5" glow="blue">
+            <SectionIntro
+              eyebrow="Live gate intelligence"
+              title="Animated gate density rings"
+              description="Each SVG ring animates from live WebSocket density and uses green, amber, or red state coloring."
+            />
+            <GateDensityRing gates={densitySource} />
+            <SectionIntro
+              eyebrow="Stadium SVG"
+              title="Top-down live gate map"
+              description="Clickable gates update the tooltip, while the highest-density gate pulses for immediate operator-grade visibility."
+            />
+            <StadiumMap densities={densitySource} waitTimes={waitSource} />
+            <SectionIntro
+              eyebrow="Concessions"
+              title="Live concession wait times"
+              description="Food, drinks, and merch queues are streamed with the same live state as the gates."
+            />
+            <ConcessionPanel concessions={concessions} />
+          </GlassPanel>
+          <JourneyTimeline storageKey={`nexarena-journey-${eventId}`} events={timelineEvents} />
+        </div>
+
+        <StadiumMapCard
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          highlightedZoneId={friendResult?.zoneId}
+          onZoneSelect={(zoneId) => setSelectedZoneId(zoneId)}
+          friendResult={friendResult}
+        />
+
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-6">
+            <FoodOrderingCard
+              onCheckout={(itemCount, pickup, eta) => {
+                setOrderState({ itemCount, pickup, eta });
+                showToast("Order confirmed and sent to pickup lane", "success");
+              }}
+            />
+            <OrderConfirmationCard order={orderState} />
+          </div>
+
+          <div className="space-y-6">
+            <FriendFinderCard
+              zones={zones}
+              onFriendLocated={(result) => {
+                setFriendResult(result);
+                if (result) {
+                  setSelectedZoneId(result.zoneId);
+                  showToast(`${result.name} located at ${result.locationLabel}`, "info");
+                }
+              }}
+            />
+
+            <GlassPanel className="space-y-4" glow="blue">
+              <SectionIntro
+                eyebrow="Smart fan layer"
+                title="Everything important stays in view"
+                description="Real-time notifications, route optimization, ticket details, and concierge actions are arranged for quick scanning during high-pressure moments."
+              />
+              <div className="grid gap-3">
                 {[
-                  { label: 'Gate', value: currentTicket.gate, icon: MapPin },
-                  { label: 'Seat', value: currentTicket.seat, icon: Ticket },
-                ].map(p => (
-                  <div key={p.label} className="bg-white/10 px-3 py-2 rounded-xl border border-white/5 flex items-center gap-2">
-                    <p.icon className="w-3.5 h-3.5 text-slate-400" />
-                    <div>
-                      <p className="text-[9px] text-slate-500 uppercase">{p.label}</p>
-                      <p className="text-sm font-bold text-white">{p.value}</p>
+                  {
+                    icon: <Wifi className="h-4 w-4 text-sky-300" />,
+                    title: "Live telemetry",
+                    description: "Crowd, queue, and ingress state update automatically through the live feed connection.",
+                  },
+                  {
+                    icon: <Ticket className="h-4 w-4 text-emerald-300" />,
+                    title: "Ticket-aware guidance",
+                    description: "Routes and recommendations stay aligned with your seat, gate, and current venue pressure.",
+                  },
+                ].map((item) => (
+                  <div key={item.title} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">{item.icon}</div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{item.title}</p>
+                        <p className="mt-1 text-sm text-slate-300">{item.description}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
-                <div className="bg-emerald-500/20 px-3 py-2 rounded-xl border border-emerald-500/30 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full" />
-                  <p className="text-sm font-bold text-emerald-300 capitalize">{currentTicket.status}</p>
-                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </GlassPanel>
+          </div>
+        </div>
       </div>
 
-      {fetchError && (
-        <div className="max-w-7xl mx-auto px-4 mb-6">
-          <ErrorBanner message={fetchError} onRetry={fetchData} />
-        </div>
-      )}
-
-      {/* Dashboard Grid */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Crowd Heatmap — 8 cols */}
-        <div className="lg:col-span-8 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 hover:border-cyan-500/30 transition-colors">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan-400" />Crowd Density
-              <span className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/30 rounded text-[9px] font-bold text-cyan-400 uppercase ml-2">AI-Powered</span>
-            </h3>
-            <span className="relative flex h-2 w-2"><span className="animate-ping absolute h-full w-full rounded-full bg-cyan-400 opacity-75" /><span className="relative rounded-full h-2 w-2 bg-cyan-500" /></span>
-          </div>
-          {crowdChartData.length > 0 ? (
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={crowdChartData}>
-                  <defs><linearGradient id="dcg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/><stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/></linearGradient></defs>
-                  <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis hide domain={[0, 100]} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} formatter={(v: number) => [`${v}%`, 'Density']} />
-                  <Area type="monotone" dataKey="value" stroke="#06b6d4" fill="url(#dcg)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : <div className="h-[220px] flex items-center justify-center text-slate-500 italic">Syncing live data...</div>}
-          {crowdData && (
-            <p className="text-xs text-slate-400 mt-2">
-              {crowdData['Gate C (East)'] > 75 ? '⚠️ East Gate showing elevated crowd. Allow extra time.' :
-               crowdData['Gate A (North)'] > 75 ? '⚠️ North Gate congested. Consider alternate entry.' :
-               '✅ All gates at normal capacity.'}
-            </p>
-          )}
-        </div>
-
-        {/* Alert Feed — 4 cols */}
-        <div className="lg:col-span-4 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Bell className="w-5 h-5 text-red-400" />Alerts
-              {unreadCount > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full">{unreadCount}</span>}
-            </h3>
-          </div>
-          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-            {alerts.length === 0 ? (
-              <p className="text-center text-slate-500 text-sm py-8 italic">No active alerts. Enjoy!</p>
-            ) : alerts.slice(0, 6).map((a, i) => (
-              <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                onClick={() => { setReadAlerts(prev => new Set(prev).add(a.id)); addLog(`Alert read: ${a.title}`); }}
-                className={`p-3 rounded-xl bg-white/5 border-l-2 cursor-pointer hover:bg-white/10 transition-colors ${
-                  a.severity === 'critical' ? 'border-red-500' : a.severity === 'high' ? 'border-amber-500' : 'border-cyan-500'
-                } ${readAlerts.has(a.id) ? 'opacity-40 line-through' : ''}`}>
-                <p className="text-sm font-semibold text-white">{a.title}</p>
-                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{a.description}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Wait Times — 6 cols */}
-        <div className="lg:col-span-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 hover:border-amber-500/30 transition-colors">
-          <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4">
-            <Clock className="w-5 h-5 text-amber-400" />Wait Time Prediction
-            <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-bold text-amber-400 uppercase ml-2">AI</span>
-          </h3>
-          {waitChartData.length > 0 ? (
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={waitChartData} layout="vertical">
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} width={80} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} formatter={(v: number) => [`${v} min`, 'Wait']} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={12}>
-                    {waitChartData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : <div className="h-[180px] flex items-center justify-center text-slate-500 italic">Calculating...</div>}
-          {waitTimes && <p className="text-xs text-slate-400 mt-2">Shortest wait at {Object.entries(waitTimes).sort(([,a],[,b]) => a - b)[0]?.[0]}.</p>}
-        </div>
-
-        {/* Recommendation — 6 cols */}
-        <div className="lg:col-span-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 hover:border-emerald-500/30 transition-colors">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <ArrowRight className="w-5 h-5 text-emerald-400" />AI Recommendations
-              <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded text-[9px] font-bold text-emerald-400 uppercase ml-2">AI Suggestion</span>
-            </h3>
-            <button onClick={fetchData} className="text-xs text-slate-500 hover:text-white transition-colors">Refresh</button>
-          </div>
-          {recommendation ? (
-            <div className="space-y-3">
-              {[
-                { icon: '🅿️', title: `Use ${recommendation.recommended_gate}`, desc: recommendation.instruction },
-                { icon: '🍔', title: 'Food: Gate 2 Concessions', desc: 'Shortest queue currently at Level 1 food court.' },
-                { icon: '🛡️', title: 'Safety: All Clear', desc: `Nearest exit: ${currentTicket?.gate || "North Gate"}.` },
-              ].map((r, i) => (
-                <div key={i} className="bg-white/5 rounded-xl p-3 flex items-start gap-3">
-                  <span className="text-lg">{r.icon}</span>
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-400">{r.title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{r.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : <div className="text-slate-500 italic">Analyzing routes...</div>}
-        </div>
-
-        {/* AR Wayfinding — 6 cols */}
-        <div className="lg:col-span-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden">
-          <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4">
-            <MapIcon className="w-5 h-5 text-cyan-400" />Stadium Navigation
-          </h3>
-          <div className="relative h-[200px] border border-white/5 rounded-2xl bg-slate-950 flex items-center justify-center">
-            <div className="relative w-full max-w-xs aspect-[2/1] border-2 border-slate-700/50 rounded-[60px] flex items-center justify-center">
-              <div className="w-[60%] h-[40%] bg-emerald-900/20 border border-emerald-500/30 rounded-[30px] flex items-center justify-center">
-                <span className="text-emerald-500/40 font-black text-[9px] tracking-[0.3em] uppercase">Pitch</span>
-              </div>
-              {currentTicket && (
-                <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute top-2 right-8 w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]" title={`Your gate: ${currentTicket.gate}`} />
-              )}
-              <div className="absolute top-0 -translate-y-1/2 px-3 py-1 bg-red-500/20 border border-red-500/30 text-red-300 text-[8px] font-bold rounded-full uppercase">North</div>
-              <div className="absolute bottom-0 translate-y-1/2 px-3 py-1 bg-red-500/20 border border-red-500/30 text-red-300 text-[8px] font-bold rounded-full uppercase">South</div>
-            </div>
-          </div>
-          <div className="absolute bottom-3 right-3 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] text-indigo-400 font-bold">AR — Coming Soon</div>
-        </div>
-
-        {/* ML Prediction + Activity Log — 6 cols */}
-        <div className="lg:col-span-6 space-y-6">
-          <MLPredictionPanel />
-          <ActivityLog entries={logEntries} />
-        </div>
-      </main>
-      <ChatbotWidget />
-    </div>
+      <OnboardingTour restartSignal={tourRestart} />
+      <PreferencesDrawer
+        open={preferencesOpen}
+        preferences={preferences}
+        onClose={() => setPreferencesOpen(false)}
+        onChange={async (nextPreferences) => {
+          setPreferences(nextPreferences);
+          try {
+            await axios.put(`${API_BASE_URL}/preferences`, nextPreferences);
+            showToast("Preferences saved", "success");
+          } catch {
+            showToast("Preferences saved locally", "info");
+          }
+        }}
+      />
+      <ChatbotWidget eventId={eventId} />
+    </DashboardShell>
   );
 }

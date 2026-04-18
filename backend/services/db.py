@@ -1,94 +1,158 @@
 import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import firebase_admin
 from firebase_admin import credentials, firestore
-from datetime import datetime
 
-# Initialize Firebase Admin
 current_dir = os.path.dirname(os.path.abspath(__file__))
 key_path = os.path.join(current_dir, "..", "serviceAccountKey.json")
 
-# Ensure it's not initialized multiple times
 if not firebase_admin._apps:
     cred = credentials.Certificate(key_path)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
+
 class Database:
     def __init__(self):
         self.db = db
 
-    # Alerts
-    def add_alert(self, title: str, description: str, severity: str = "high"):
-        alert_ref = self.db.collection('alerts').document()
+    def add_alert(self, title: str, description: str, severity: str = "high", event_id: str = "global", **extra: Any):
+        alert_ref = self.db.collection("events").document(event_id).collection("alerts").document()
         alert_ref.set({
             "title": title,
             "description": description,
             "severity": severity,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "event_id": event_id,
+            **extra,
         })
         return alert_ref.id
 
-    def get_alerts(self):
+    def save_alert(self, title: str, description: str, severity: str = "high", event_id: str = "global", **extra: Any):
+        return self.add_alert(title, description, severity, event_id, **extra)
+
+    def get_alerts(self, event_id: Optional[str] = None):
         alerts = []
-        # Get latest 20 alerts
-        docs = self.db.collection('alerts').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(20).stream()
+        if event_id:
+            docs = (
+                self.db.collection("events")
+                .document(event_id)
+                .collection("alerts")
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .limit(20)
+                .stream()
+            )
+        else:
+            docs = (
+                self.db.collection_group("alerts")
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .limit(20)
+                .stream()
+            )
+
         for doc in docs:
             alert = doc.to_dict()
-            alert['id'] = doc.id
+            alert["id"] = doc.id
             alerts.append(alert)
         return alerts
 
-    def resolve_alert(self, alert_id: str):
-        self.db.collection('alerts').document(alert_id).delete()
-        return True
+    def resolve_alert(self, alert_id: str, event_id: Optional[str] = None):
+        if event_id:
+            self.db.collection("events").document(event_id).collection("alerts").document(alert_id).delete()
+            return True
 
-    # Events
+        docs = self.db.collection_group("alerts").where("__name__", "==", alert_id).limit(1).stream()
+        for doc in docs:
+            doc.reference.delete()
+            return True
+        return False
+
     def get_events(self):
         events = []
-        docs = self.db.collection('events').stream()
+        docs = self.db.collection("events").stream()
         for doc in docs:
             event = doc.to_dict()
-            event['id'] = doc.id
+            event["id"] = doc.id
             events.append(event)
         return events
 
     def get_event(self, event_id: str):
-        doc_ref = self.db.collection('events').document(event_id)
+        doc_ref = self.db.collection("events").document(event_id)
         doc = doc_ref.get()
         if doc.exists:
             event = doc.to_dict()
-            event['id'] = doc.id
+            event["id"] = doc.id
             return event
         return None
 
-    # Tickets
     def get_user_tickets(self, user_id: str):
         tickets = []
-        docs = self.db.collection('tickets').where('user_id', '==', user_id).stream()
+        docs = self.db.collection("tickets").where("user_id", "==", user_id).stream()
         for doc in docs:
             ticket = doc.to_dict()
-            ticket['id'] = doc.id
+            ticket["id"] = doc.id
             tickets.append(ticket)
         return tickets
 
     def verify_ticket(self, ticket_id: str):
-        doc_ref = self.db.collection('tickets').document(ticket_id)
+        doc_ref = self.db.collection("tickets").document(ticket_id)
         doc = doc_ref.get()
         if doc.exists:
             ticket = doc.to_dict()
-            ticket['id'] = doc.id
+            ticket["id"] = doc.id
             return ticket
         return None
 
-    # Hosts
-    def verify_host(self, event_id: str, host_id: str):
-        doc_ref = self.db.collection('hosts').document(host_id)
+    def ensure_user(self, uid: str, email: Optional[str] = None):
+        user_ref = self.db.collection("users").document(uid)
+        doc = user_ref.get()
+        if doc.exists:
+            user = doc.to_dict()
+        else:
+            user = {"uid": uid, "email": email, "role": "fan", "assignedEvents": []}
+            user_ref.set(user)
+        user["uid"] = uid
+        return user
+
+    def get_user(self, uid: str):
+        doc = self.db.collection("users").document(uid).get()
+        if doc.exists:
+            user = doc.to_dict()
+            user["uid"] = uid
+            user.setdefault("role", "fan")
+            user.setdefault("assignedEvents", [])
+            return user
+        return None
+
+    def verify_host_access(self, uid: str, event_id: Optional[str] = None):
+        user = self.get_user(uid)
+        if not user or user.get("role") != "host":
+            return False
+        assigned_events = user.get("assignedEvents") or []
+        return event_id is None or "*" in assigned_events or event_id in assigned_events
+
+    def legacy_verify_host(self, event_id: str, host_id: str):
+        doc_ref = self.db.collection("hosts").document(host_id)
         doc = doc_ref.get()
         if doc.exists:
             host_data = doc.to_dict()
-            if host_data.get('event_id') == event_id:
+            if host_data.get("event_id") == event_id:
                 return True
         return False
+
+    def save_preferences(self, uid: str, preferences: Dict[str, Any]):
+        pref_ref = self.db.collection("user_preferences").document(uid)
+        pref_ref.set({"uid": uid, **preferences, "updatedAt": datetime.now().isoformat()}, merge=True)
+        return pref_ref.get().to_dict()
+
+    def get_preferences(self, uid: str):
+        doc = self.db.collection("user_preferences").document(uid).get()
+        if doc.exists:
+            return doc.to_dict()
+        return {"uid": uid, "notifications": True, "sound": False}
+
 
 firebase_db = Database()

@@ -2,3 +2,33 @@
 @import './tailwind.css';
 @import './theme.css';
 @import './globals.css';
+
+:root {
+  --bg-primary: #f4f7fb;
+  --bg-secondary: #e8eef7;
+  --bg-card: rgba(255, 255, 255, 0.84);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-color: rgba(15, 23, 42, 0.12);
+  --accent: #0284c7;
+  --nav-bg: rgba(255, 255, 255, 0.76);
+}
+
+[data-theme="dark"] {
+  --bg-primary: #040814;
+  --bg-secondary: #08111f;
+  --bg-card: rgba(15, 23, 42, 0.74);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: rgba(148, 163, 184, 0.14);
+  --accent: #38bdf8;
+  --nav-bg: rgba(2, 6, 23, 0.74);
+}
+
+body {
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+@theme {
+  --color-white: var(--text-primary);
+}

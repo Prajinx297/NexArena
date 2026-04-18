@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -12,8 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source
 COPY . .
 
-# Expose port (Cloud Run defaults to 8080)
 EXPOSE 8080
 
-# Command to run FastAPI via main.py to dynamically parse $PORT
-CMD ["python", "main.py"]
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
