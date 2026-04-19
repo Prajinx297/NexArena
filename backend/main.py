@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 import firebase_admin
@@ -21,7 +22,11 @@ app = FastAPI(title="NexArena API", description="AI-Powered Smart Stadium System
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+allowed_origins = [
+    origin.strip()
+    for origin in re.split(r"[\s,]+", os.getenv("ALLOWED_ORIGINS", "").strip())
+    if origin.strip()
+]
 if not allowed_origins:
   allowed_origins = ["http://localhost:5173", "http://localhost:3000"]
 
