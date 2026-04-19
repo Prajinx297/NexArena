@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, Link } from "react-router-dom";
 import { Shield, User, Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
@@ -16,7 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { refreshUserRole, logout } = useAuth();
+  const { setRole: setAuthRole, logout } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,27 +25,24 @@ export function LoginPage() {
 
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      const resolvedRole = await refreshUserRole(credential.user, role);
 
-      localStorage.setItem("userEmail", email);
+      localStorage.setItem("userRole", role);
+      localStorage.setItem("nexarena-role", role);
+      localStorage.setItem("userEmail", credential.user.email ?? email);
+      setAuthRole(role);
+
       showToast("Login successful! Redirecting...", "success");
-
-      setTimeout(() => {
-        if (resolvedRole === "host") {
-          navigate("/host/events", { replace: true });
-        } else {
-          navigate("/events", { replace: true });
-        }
-      }, 600);
+      navigate(role === "host" ? "/host/events" : "/events", { replace: true });
     } catch (err: any) {
       if (auth.currentUser) {
         await logout();
       }
+
       const msg = err.code === "auth/invalid-credential"
         ? "Invalid email or password."
         : err.code === "auth/user-not-found"
-        ? "No account found with this email."
-        : err.message || "Failed to log in.";
+          ? "No account found with this email."
+          : err.message || "Failed to log in.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -55,24 +52,27 @@ export function LoginPage() {
   return (
     <div className="min-h-screen font-sans" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
       <Navbar />
-      <main className="relative flex flex-col lg:flex-row w-full min-h-screen">
-        {/* Left — Visual Side */}
-        <div className="hidden lg:flex flex-1 items-center justify-center relative overflow-hidden">
+      <main className="relative flex min-h-screen w-full flex-col lg:flex-row">
+        <div className="relative hidden flex-1 items-center justify-center overflow-hidden lg:flex">
           <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 24%, transparent), var(--bg-primary) 72%)" }} />
-          <div className="absolute inset-0 opacity-[0.03]" style={{
-            backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(6,182,212,0.1) 50px, rgba(6,182,212,0.1) 51px), repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(6,182,212,0.1) 50px, rgba(6,182,212,0.1) 51px)',
-          }} />
-          <div className="relative z-10 text-center px-12">
-            <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 tracking-tight leading-tight mb-6">
-              Welcome to<br />NexArena
+          <div
+            className="absolute inset-0 opacity-[0.03]"
+            style={{
+              backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(6,182,212,0.1) 50px, rgba(6,182,212,0.1) 51px), repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(6,182,212,0.1) 50px, rgba(6,182,212,0.1) 51px)",
+            }}
+          />
+          <div className="relative z-10 px-12 text-center">
+            <h2 className="mb-6 text-5xl font-black leading-tight tracking-tight text-transparent bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text">
+              Welcome to
+              <br />
+              NexArena
             </h2>
-            <p className="text-lg max-w-md" style={{ color: "var(--text-secondary)" }}>The smartest stadium experience platform. AI-powered insights at your fingertips.</p>
+            <p className="max-w-md text-lg" style={{ color: "var(--text-secondary)" }}>The smartest stadium experience platform. AI-powered insights at your fingertips.</p>
           </div>
         </div>
 
-        {/* Right — Form */}
-        <div className="flex-1 flex items-center justify-center px-4 py-24">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-900/10 blur-[150px] rounded-full pointer-events-none lg:hidden" />
+        <div className="flex flex-1 items-center justify-center px-4 py-24">
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-900/10 blur-[150px] lg:hidden" />
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -80,49 +80,51 @@ export function LoginPage() {
             className="relative z-10 w-full max-w-md rounded-3xl border p-8 shadow-2xl backdrop-blur-xl"
             style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}
           >
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-black py-1" style={{ color: "var(--text-primary)" }}>Welcome Back</h1>
+            <div className="mb-8 text-center">
+              <h1 className="py-1 text-3xl font-black" style={{ color: "var(--text-primary)" }}>Welcome Back</h1>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Log in to view live updates or manage events</p>
             </div>
 
-            {/* Role Toggle */}
-            <div className="flex rounded-xl border p-1 mb-8" style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)" }}>
+            <div className="mb-8 flex rounded-xl border p-1" style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)" }}>
               <button
+                type="button"
                 onClick={() => setRole("fan")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  role === "fan" ? "shadow-md" : ""
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${role === "fan" ? "shadow-md" : ""}`}
                 style={{ background: role === "fan" ? "var(--bg-card)" : "transparent", color: role === "fan" ? "var(--accent)" : "var(--text-secondary)" }}
               >
-                <User className="w-4 h-4" />Fan Login
+                <User className="h-4 w-4" />
+                Fan Login
               </button>
               <button
+                type="button"
                 onClick={() => setRole("host")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  role === "host" ? "shadow-md" : ""
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${role === "host" ? "shadow-md" : ""}`}
                 style={{ background: role === "host" ? "var(--bg-card)" : "transparent", color: role === "host" ? "var(--accent)" : "var(--text-secondary)" }}
               >
-                <Shield className="w-4 h-4" />Host Admin
+                <Shield className="h-4 w-4" />
+                Host Admin
               </button>
             </div>
 
-            {error && (
+            {error ? (
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2.5 rounded-xl mb-4 text-sm text-center"
+                className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-center text-sm text-red-400"
               >
                 {error}
               </motion.div>
-            )}
+            ) : null}
 
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Email Address</label>
                 <input
-                  type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-                  className="w-full rounded-xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full rounded-xl border px-4 py-3 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                   style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}
                   placeholder={role === "host" ? "admin@stadium.com" : "you@example.com"}
                 />
@@ -130,23 +132,28 @@ export function LoginPage() {
               <div className="space-y-2">
                 <label className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Password</label>
                 <input
-                  type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-                  className="w-full rounded-xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full rounded-xl border px-4 py-3 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                   style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}
-                  placeholder="••••••••"
+                  placeholder="********"
                 />
               </div>
               <button
-                type="submit" disabled={loading}
-                className="w-full mt-4 flex items-center justify-center py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition-all duration-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] disabled:opacity-70 disabled:cursor-not-allowed"
+                type="submit"
+                disabled={loading}
+                className="mt-4 flex w-full items-center justify-center rounded-xl bg-cyan-500 py-4 font-bold text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all duration-300 hover:bg-cyan-400 hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />Authenticating...
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Authenticating...
                   </span>
                 ) : "Sign In"}
               </button>
-              <p className="text-center text-sm mt-4" style={{ color: "var(--text-secondary)" }}>
+              <p className="mt-4 text-center text-sm" style={{ color: "var(--text-secondary)" }}>
                 Don't have an account?{" "}
                 <Link to="/signup" className="text-cyan-400 hover:underline">Sign Up</Link>
               </p>
