@@ -6,7 +6,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:backend": "python -m unittest discover -s backend/tests -v"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -76,7 +78,8 @@
     "@vitejs/plugin-react": "4.7.0",
     "globals": "^17.5.0",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "vitest": "^3.2.4"
   },
   "pnpm": {
     "overrides": {
