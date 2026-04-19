@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Navbar } from "../components/Navbar";
 import { ChatbotWidget } from "../components/ChatbotWidget";
@@ -9,8 +9,7 @@ import { EmptyState } from "../components/EmptyState";
 import { useToast } from "../context/ToastContext";
 import { Ticket, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import type { Ticket as TicketType } from "../types";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { getUserTickets, verifyTicket as verifyTicketRequest } from "../utils/api";
 
 export function MyTicketsPage() {
   const { currentUser } = useAuth();
@@ -25,12 +24,32 @@ export function MyTicketsPage() {
   const [shakeInput, setShakeInput] = useState(false);
 
   useEffect(() => {
-    const userId = "test_user_id";
-    fetch(`${API_BASE_URL}/user-tickets/${userId}`)
-      .then((res) => res.json())
-      .then((data) => { if (data.tickets) setTickets(data.tickets); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    document.title = "My Tickets | NexArena";
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadTickets = async () => {
+      try {
+        const userId = currentUser?.uid ?? "test_user_id";
+        const nextTickets = await getUserTickets(userId);
+        if (isMounted) {
+          setTickets(nextTickets);
+        }
+      } catch (fetchError) {
+        console.error("Failed to fetch tickets:", fetchError);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadTickets();
+    return () => {
+      isMounted = false;
+    };
   }, [currentUser]);
 
   const handleVerifyTicket = async (e: React.FormEvent) => {
@@ -42,9 +61,7 @@ export function MyTicketsPage() {
     setVerified(false);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/verify-ticket/${selectedTicketId}`);
-      if (!res.ok) throw new Error("Invalid Ticket ID");
-      const data = await res.json();
+      const data = await verifyTicketRequest(selectedTicketId);
       if (data.valid) {
         setVerified(true);
         localStorage.setItem("current_ticket", JSON.stringify(data.ticket));
@@ -159,9 +176,12 @@ export function MyTicketsPage() {
             </div>
           </div>
 
-          <form onSubmit={handleVerifyTicket} className="space-y-4">
+          <form noValidate onSubmit={handleVerifyTicket} className="space-y-4">
             <motion.div animate={shakeInput ? { x: [-10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
               <input
+                id="ticket-id"
+                name="ticketId"
+                aria-label="Ticket ID"
                 type="text" value={selectedTicketId}
                 onChange={(e) => setSelectedTicketId(e.target.value)}
                 placeholder="e.g. TICKET-1234"
@@ -170,7 +190,7 @@ export function MyTicketsPage() {
             </motion.div>
 
             {error && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-red-400 text-sm">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} role="alert" className="flex items-center gap-2 text-red-400 text-sm">
                 <AlertCircle className="w-4 h-4" />{error}
               </motion.div>
             )}

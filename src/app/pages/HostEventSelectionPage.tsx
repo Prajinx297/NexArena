@@ -1,15 +1,15 @@
 /// <reference types="vite/client" />
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router";
+import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { LoadingSkeleton } from "../components/LoadingSkeleton";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { useToast } from "../context/ToastContext";
-import { Shield, Calendar, MapPin, Zap } from "lucide-react";
+import { Shield, Calendar, MapPin } from "lucide-react";
 import type { Event } from "../types";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { FALLBACK_IMAGE } from "../utils/helpers";
+import { getEvents } from "../utils/api";
 
 export function HostEventSelectionPage() {
   const navigate = useNavigate();
@@ -17,19 +17,39 @@ export function HostEventSelectionPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
-  const fetchEvents = () => {
+  const fetchEvents = async (isMounted = true) => {
     setFetchError(null);
     setLoading(true);
-    fetch(`${API_BASE_URL}/events`)
-      .then((r) => r.json())
-      .then((d) => { if (d.events) setEvents(d.events); })
-      .catch((e) => setFetchError(e.message))
-      .finally(() => setLoading(false));
+    try {
+      const nextEvents = await getEvents();
+      if (isMounted) {
+        setEvents(nextEvents);
+      }
+    } catch (error: any) {
+      console.error("Failed to load host events:", error);
+      if (isMounted) {
+        setFetchError(error?.message ?? "Unable to load host events.");
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
   };
 
-  useEffect(() => { fetchEvents(); }, []);
+  useEffect(() => {
+    document.title = "Host Events | NexArena";
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchEvents(isMounted);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
 
   return (
@@ -53,7 +73,7 @@ export function HostEventSelectionPage() {
         {/* Events Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-2xl border p-6 h-72" style={{ background: "var(--bg-card)", borderColor: "var(--border-color)" }}><LoadingSkeleton lines={5} /></div>
             ))}
           </div>
@@ -73,13 +93,16 @@ export function HostEventSelectionPage() {
                 <div className="h-40 overflow-hidden relative">
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent z-10" />
                   <img src={event.image} alt={event.name}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute bottom-3 left-3 z-20">
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase backdrop-blur-md border ${
-                      event.status === 'Live Now'
-                        ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
+                      event.status === "Live Now"
+                        ? "bg-red-500/20 border-red-500/30 text-red-400" : "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
                     }`}>
-                      {event.status === 'Live Now' && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5 animate-pulse" />}
+                      {event.status === "Live Now" && <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5 animate-pulse" />}
                       {event.status}
                     </span>
                   </div>

@@ -16,6 +16,35 @@ export function LoadingSkeleton({ lines = 3, className = "" }: { lines?: number;
   );
 }
 
+export function LoadingSpinner({
+  size = "md",
+  label,
+}: {
+  size?: "sm" | "md" | "lg";
+  label?: string;
+}) {
+  const sizeClass = {
+    sm: "h-4 w-4",
+    md: "h-8 w-8",
+    lg: "h-12 w-12",
+  }[size];
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-12" role="status" aria-live="polite">
+      <div className={`animate-spin rounded-full border-2 border-sky-300/70 border-t-transparent ${sizeClass}`} />
+      {label ? <p className="text-sm text-[var(--text-secondary)]">{label}</p> : null}
+    </div>
+  );
+}
+
+export function FullScreenSpinner({ label = "Loading NexArena..." }: { label?: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+      <LoadingSpinner size="lg" label={label} />
+    </div>
+  );
+}
+
 export function DashboardSkeleton() {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-app-bg">

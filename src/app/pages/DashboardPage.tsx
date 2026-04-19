@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw, Settings, Ticket, TrendingUp, Wifi } from "lucide-react";
-import axios from "axios";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { ConnectionStatus } from "../components/ConnectionStatus";
@@ -30,9 +29,9 @@ import { StadiumMap } from "../components/StadiumMap";
 import { useToast } from "../context/ToastContext";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Alert, Event, LiveStadiumState, UserPreferences } from "../types";
+import { getAlertsForEvent, getEventById, getRecommendations, getWaitTime, savePreferences } from "../utils/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL;
+const WS_BASE_URL = import.meta.env.VITE_WS_URL ?? import.meta.env.VITE_WS_BASE_URL ?? import.meta.env.VITE_API_URL?.replace("https://", "wss://").replace("http://", "ws://") ?? import.meta.env.VITE_API_BASE_URL?.replace("https://", "wss://").replace("http://", "ws://");
 
 interface RecommendationResponse {
   recommended_gate?: string;
@@ -112,6 +111,10 @@ export function DashboardPage() {
   const { data: wsData, status: wsStatus } = useWebSocket<LiveStadiumState>(`${WS_BASE_URL}/crowd/${eventId}`);
 
   useEffect(() => {
+    document.title = `${eventDetails?.name ?? "Fan Dashboard"} | NexArena`;
+  }, [eventDetails?.name]);
+
+  useEffect(() => {
     if (wsData?.heat_map) {
       setCrowdData(wsData.heat_map);
       setWaitTimes(wsData.wait_times ?? null);
@@ -140,16 +143,15 @@ export function DashboardPage() {
     setFetchError(null);
 
     try {
-      const [waitResponse, recommendResponse, eventsResponse, alertsResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/wait-time/${eventId}`),
-        axios.get(`${API_BASE_URL}/recommend/${eventId}`),
-        axios.get(`${API_BASE_URL}/events`),
-        axios.get(`${API_BASE_URL}/alerts`, { params: { event_id: eventId } }),
+      const [waitResponse, recommendResponse, matchedEvent, nextAlerts] = await Promise.all([
+        getWaitTime(eventId),
+        getRecommendations(eventId),
+        getEventById(eventId),
+        getAlertsForEvent(eventId),
       ]);
 
-      setWaitTimes(waitResponse.data.wait_times ?? null);
-      setRecommendation(recommendResponse.data.recommendation ?? null);
-      const nextAlerts = alertsResponse.data.alerts ?? [];
+      setWaitTimes(waitResponse.wait_times ?? null);
+      setRecommendation(Array.isArray(recommendResponse) ? recommendResponse[0] ?? null : recommendResponse ?? null);
       setAlerts(nextAlerts);
       if (nextAlerts.length) {
         setTimelineEvents((current) => [
@@ -163,7 +165,6 @@ export function DashboardPage() {
         ]);
       }
 
-      const matchedEvent = (eventsResponse.data.events ?? []).find((event: Event) => event.id === eventId) ?? null;
       setEventDetails(matchedEvent);
     } catch (error: any) {
       setFetchError(error?.message ?? "Failed to load live dashboard data.");
@@ -238,6 +239,7 @@ export function DashboardPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate("/events")}
               className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
             >
@@ -249,7 +251,7 @@ export function DashboardPage() {
                 <span>&gt;</span>
                 <Link to="/events" className="hover:text-white">Events</Link>
                 <span>&gt;</span>
-                <button onClick={() => navigate(`/dashboard/${eventId}`)} className="hover:text-white">
+                <button type="button" onClick={() => navigate(`/dashboard/${eventId}`)} className="hover:text-white">
                   {eventSummary.name}
                 </button>
               </div>
@@ -261,6 +263,7 @@ export function DashboardPage() {
           <div className="flex flex-wrap items-center gap-3">
             <ConnectionStatus status={wsStatus} />
             <button
+              type="button"
               onClick={() => {
                 fetchData();
                 showToast("Live dashboard refreshed", "info");
@@ -271,12 +274,14 @@ export function DashboardPage() {
               Refresh
             </button>
             <button
+              type="button"
               onClick={() => setTourRestart((value) => value + 1)}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10"
             >
               ? Restart tour
             </button>
             <button
+              type="button"
               onClick={() => setPreferencesOpen(true)}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10"
             >
@@ -426,7 +431,7 @@ export function DashboardPage() {
         onChange={async (nextPreferences) => {
           setPreferences(nextPreferences);
           try {
-            await axios.put(`${API_BASE_URL}/preferences`, nextPreferences);
+            await savePreferences(nextPreferences);
             showToast("Preferences saved", "success");
           } catch {
             showToast("Preferences saved locally", "info");

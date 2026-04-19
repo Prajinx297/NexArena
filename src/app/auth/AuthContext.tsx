@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "../../lib/firebase";
+import { FullScreenSpinner } from "../components/LoadingSkeleton";
 
 const ROLE_STORAGE_KEY = "userRole";
 const LEGACY_ROLE_STORAGE_KEY = "nexarena-role";
@@ -23,7 +24,7 @@ const getStoredAssignedEvents = (): string[] => {
 
 interface AuthContextType {
   currentUser: User | null;
-  loading: boolean;
+  authLoading: boolean;
   role: "fan" | "host";
   setRole: (role: "fan" | "host") => void;
   assignedEvents: string[];
@@ -91,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = {
     currentUser,
-    loading,
+    authLoading: loading,
     role,
     setRole,
     assignedEvents,
@@ -101,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? <FullScreenSpinner label="Resolving your session..." /> : children}
     </AuthContext.Provider>
   );
 }

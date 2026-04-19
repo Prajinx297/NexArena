@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { Alert } from "../../types";
 import { GlassPanel, MetricChip, MiniLabel, PulseDot, SectionIntro, StatStack, StatusBadge } from "./DashboardPrimitives";
+import { FALLBACK_IMAGE } from "../../utils/helpers";
 
 export interface FanZone {
   id: string;
@@ -424,7 +425,7 @@ export function FoodOrderingCard({
               className="overflow-hidden rounded-[26px] border border-white/10 bg-black/20"
             >
               <div className="h-36 overflow-hidden">
-                <img src={item.image} alt={item.name} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
+                  <img src={item.image} alt={item.name} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.src = FALLBACK_IMAGE; }} className="h-full w-full object-cover transition duration-500 hover:scale-105" />
               </div>
               <div className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">

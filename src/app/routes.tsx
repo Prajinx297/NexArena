@@ -20,7 +20,11 @@ export const router = createBrowserRouter([
   },
   {
     path: "/events",
-    Component: EventsPage,
+    element: (
+      <ProtectedRoute>
+        <EventsPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/login",
@@ -32,12 +36,16 @@ export const router = createBrowserRouter([
   },
   {
     path: "/my-tickets",
-    element: <Navigate to="/events" replace />,
+    element: (
+      <ProtectedRoute>
+        <Navigate to="/events" replace />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/dashboard/:eventId",
     element: (
-      <ProtectedRoute allowedRoles={["fan"]}>
+      <ProtectedRoute requiredRole="fan">
         <DashboardPage />
       </ProtectedRoute>
     ),

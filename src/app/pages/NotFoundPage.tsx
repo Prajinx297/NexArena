@@ -1,9 +1,14 @@
-import { useNavigate } from "react-router";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Home, ArrowLeft, AlertCircle } from "lucide-react";
 
 export function NotFoundPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = "Page Not Found | NexArena";
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 relative overflow-hidden">
@@ -42,6 +47,7 @@ export function NotFoundPage() {
 
           <div className="flex items-center justify-center gap-4">
             <button
+              type="button"
               onClick={() => navigate(-1)}
               className="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-2xl text-sm font-bold transition-all"
             >
@@ -49,6 +55,7 @@ export function NotFoundPage() {
               Go Back
             </button>
             <button
+              type="button"
               onClick={() => navigate("/")}
               className="flex items-center gap-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-cyan-500/20"
             >

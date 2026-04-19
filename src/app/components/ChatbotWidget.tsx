@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Bot, MessageCircle, Send, X } from "lucide-react";
-import axios from "axios";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { sendChatMessage } from "../utils/api";
 
 interface Message {
   id: number;
@@ -23,7 +21,7 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: ++msgId,
-      text: "I’m NexBot. Ask about gates, alerts, or food queues and I’ll use live stadium context.",
+      text: "I'm NexBot. Ask about gates, alerts, or food queues and I'll use live stadium context.",
       sender: "bot",
     },
   ]);
@@ -46,14 +44,14 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
     setTyping(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/chat`, { event_id: eventId, message: trimmed });
-      setMessages((current) => [...current, { id: ++msgId, text: response.data.answer, sender: "bot" }]);
+      const answer = await sendChatMessage({ event_id: eventId, message: trimmed });
+      setMessages((current) => [...current, { id: ++msgId, text: answer, sender: "bot" }]);
     } catch {
       setMessages((current) => [
         ...current,
         {
           id: ++msgId,
-          text: "I couldn’t reach live context right now. Try again in a moment.",
+          text: "I couldn't reach live context right now. Try again in a moment.",
           sender: "bot",
         },
       ]);
@@ -70,6 +68,8 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
+            type="button"
+            aria-label="Open NexBot chat"
             onClick={() => setIsOpen(true)}
             className="fixed bottom-6 right-6 z-[150] flex h-14 w-14 items-center justify-center rounded-full bg-sky-300 text-slate-950 shadow-[0_0_34px_rgba(56,189,248,0.42)] transition hover:brightness-110"
           >
@@ -96,7 +96,12 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
                   <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-sky-200">Live context</p>
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="rounded-xl p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white">
+              <button
+                type="button"
+                aria-label="Close NexBot chat"
+                onClick={() => setIsOpen(false)}
+                className="rounded-xl p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -136,6 +141,7 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
               {quickReplies.map((reply) => (
                 <button
                   key={reply}
+                  type="button"
                   onClick={() => sendMessage(reply)}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-white/10"
                 >
@@ -145,6 +151,7 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
             </div>
 
             <form
+              noValidate
               onSubmit={(event) => {
                 event.preventDefault();
                 sendMessage(input);
@@ -152,6 +159,9 @@ export function ChatbotWidget({ eventId = "default" }: ChatbotWidgetProps) {
               className="flex items-center gap-2 border-t border-white/10 bg-white/[0.04] p-3"
             >
               <input
+                id="chatbot-input"
+                name="message"
+                aria-label="Ask NexBot"
                 type="text"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}

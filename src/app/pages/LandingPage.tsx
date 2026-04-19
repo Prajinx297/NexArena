@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { motion } from "motion/react";
 import { ArrowRight, BarChart3, Bell, Github, Instagram, Linkedin, Mail, Navigation, Shield, Sparkles, Twitter } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 
@@ -20,6 +21,10 @@ const footerSections = [
 
 export function LandingPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = "NexArena | Smart Stadium Experience";
+  }, []);
 
   return (
     <div
@@ -55,6 +60,7 @@ export function LandingPage() {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
+                  type="button"
                   onClick={() => navigate("/events")}
                   className="inline-flex items-center justify-center gap-3 rounded-full px-6 py-4 font-semibold transition hover:brightness-110"
                   style={{ background: "var(--accent)", color: "var(--bg-primary)" }}
@@ -63,6 +69,7 @@ export function LandingPage() {
                   <ArrowRight className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => navigate("/host/events")}
                   className="inline-flex items-center justify-center gap-3 rounded-full border px-6 py-4 font-semibold transition"
                   style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
@@ -184,14 +191,25 @@ export function LandingPage() {
                 <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{section.title}</p>
                 <div className="mt-4 space-y-3">
                   {section.links.map(([item, href]) => (
-                    <a
-                      key={item}
-                      href={href}
-                      className="block text-sm transition hover:translate-x-1"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {item}
-                    </a>
+                    href.startsWith("mailto:") ? (
+                      <a
+                        key={item}
+                        href={href}
+                        className="block text-sm transition hover:translate-x-1"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        {item}
+                      </a>
+                    ) : (
+                      <Link
+                        key={item}
+                        to={href}
+                        className="block text-sm transition hover:translate-x-1"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        {item}
+                      </Link>
+                    )
                   ))}
                 </div>
               </div>
@@ -199,7 +217,7 @@ export function LandingPage() {
           </div>
         </div>
         <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-3 border-t pt-6 text-sm sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border-color)" }}>
-          <span>© 2026 NexArena. Built for modern live-event operations.</span>
+          <span>(c) 2026 NexArena. Built for modern live-event operations.</span>
           <span>Ready for Cloud Run deployment</span>
         </div>
       </footer>

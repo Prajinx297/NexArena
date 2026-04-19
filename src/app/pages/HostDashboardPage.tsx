@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
-import axios from "axios";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -19,9 +18,9 @@ import { DashboardShell, GlassPanel, SectionIntro } from "../components/dashboar
 import { useToast } from "../context/ToastContext";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Alert, Event } from "../types";
+import { createAlert, getAlertsForEvent, getEvents, resolveAlert as resolveAlertRequest } from "../utils/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL;
+const WS_BASE_URL = import.meta.env.VITE_WS_URL ?? import.meta.env.VITE_WS_BASE_URL ?? import.meta.env.VITE_API_URL?.replace("https://", "wss://").replace("http://", "ws://") ?? import.meta.env.VITE_API_BASE_URL?.replace("https://", "wss://").replace("http://", "ws://");
 
 const fallbackAlerts: Alert[] = [
   {
@@ -95,6 +94,10 @@ export function HostDashboardPage() {
   const { data: wsData, status: wsStatus } = useWebSocket<any>(`${WS_BASE_URL}/crowd/${eventId}`);
 
   useEffect(() => {
+    document.title = `${eventDetails?.name ?? "Host Dashboard"} | NexArena`;
+  }, [eventDetails?.name]);
+
+  useEffect(() => {
     if (wsData?.heat_map) {
       setDensities((current) => ({
         ...current,
@@ -125,14 +128,14 @@ export function HostDashboardPage() {
     setFetchError(null);
 
     try {
-      const [eventsResponse, alertsResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/events`),
-        axios.get(`${API_BASE_URL}/alerts`, { params: { event_id: eventId } }),
+      const [events, nextAlerts] = await Promise.all([
+        getEvents(),
+        getAlertsForEvent(eventId),
       ]);
 
-      const matchedEvent = (eventsResponse.data.events ?? []).find((event: Event) => event.id === eventId) ?? null;
+      const matchedEvent = events.find((event: Event) => event.id === eventId) ?? null;
       setEventDetails(matchedEvent);
-      setAlerts(alertsResponse.data.alerts ?? []);
+      setAlerts(nextAlerts);
     } catch (error: any) {
       setFetchError(error?.message ?? "Failed to load host dashboard.");
     } finally {
@@ -151,7 +154,7 @@ export function HostDashboardPage() {
     setSending(true);
 
     try {
-      await axios.post(`${API_BASE_URL}/generate-alert`, {
+      await createAlert({
         title: `[${broadcastSeverity.toUpperCase()}] ${broadcastTarget === "all" ? "All Zones" : broadcastTarget}`,
         description: broadcastMessage,
         severity: broadcastSeverity,
@@ -170,7 +173,7 @@ export function HostDashboardPage() {
 
   const handleResolveAlert = async (alertId: string) => {
     try {
-      await axios.delete(`${API_BASE_URL}/alerts/${alertId}`, { params: { event_id: eventId } });
+      await resolveAlertRequest(alertId, eventId);
       setAlerts((current) => current.filter((alert) => alert.id !== alertId));
       showToast("Alert resolved", "info");
     } catch {
@@ -194,6 +197,7 @@ export function HostDashboardPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate("/host")}
               className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
             >
@@ -205,7 +209,7 @@ export function HostDashboardPage() {
                 <span>&gt;</span>
                 <Link to="/events" className="hover:text-white">Events</Link>
                 <span>&gt;</span>
-                <button onClick={() => navigate(`/host-dashboard/${eventId}`)} className="hover:text-white">
+                <button type="button" onClick={() => navigate(`/host-dashboard/${eventId}`)} className="hover:text-white">
                   {eventDetails?.name ?? "Event"}
                 </button>
               </div>
@@ -217,6 +221,7 @@ export function HostDashboardPage() {
           <div className="flex flex-wrap items-center gap-3">
             <ConnectionStatus status={wsStatus} />
             <button
+              type="button"
               onClick={() => {
                 fetchData();
                 showToast("Operations data refreshed", "info");

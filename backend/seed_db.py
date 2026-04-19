@@ -1,11 +1,16 @@
-import json
-from services.db import db as firestore_client
+import logging
+
+from services.db import get_firestore_client
+
+logger = logging.getLogger(__name__)
+
 
 def seed_database():
+    firestore_client = get_firestore_client()
     events = [
         {
             "id": "camp-nou",
-            "name": "El Clásico — FC Barcelona vs Real Madrid",
+            "name": "El Clásico - FC Barcelona vs Real Madrid",
             "stadium": "Camp Nou",
             "city": "Barcelona, Spain",
             "date": "May 10, 2026",
@@ -25,7 +30,7 @@ def seed_database():
         },
         {
             "id": "old-trafford",
-            "name": "Premier League — Man United vs Liverpool",
+            "name": "Premier League - Man United vs Liverpool",
             "stadium": "Old Trafford",
             "city": "Manchester, England",
             "date": "June 15, 2026",
@@ -35,14 +40,12 @@ def seed_database():
         }
     ]
 
-    print("Seeding events to Firestore...")
+    logger.info("Seeding events to Firestore...")
     for event in events:
         doc_id = event.pop("id")
         doc_ref = firestore_client.collection('events').document(doc_id)
         doc_ref.set(event)
-        print(f"Added event: {event['name']} with ID {doc_id}")
-
-    print("Database seeding completed successfully.")
+        logger.info("Added event %s with ID %s", event["name"], doc_id)
 
     hosts = [
         {
@@ -57,17 +60,17 @@ def seed_database():
         }
     ]
 
-    print("Seeding hosts to Firestore...")
+    logger.info("Seeding hosts to Firestore...")
     for host in hosts:
         doc_id = host.pop("id")
         doc_ref = firestore_client.collection('hosts').document(doc_id)
         doc_ref.set(host)
-        print(f"Added host: {host['name']} with ID {doc_id}")
+        logger.info("Added host %s with ID %s", host["name"], doc_id)
 
     tickets = [
         {
             "id": "TICKET-1234",
-            "user_id": "test_user_id", # We will use a generic one or assume the mocked user is "test_user_id"
+            "user_id": "test_user_id",
             "event_id": "camp-nou",
             "seat": "A12",
             "gate": "Gate 3",
@@ -82,17 +85,15 @@ def seed_database():
             "status": "valid"
         }
     ]
-    
-    # We also need a known user id to test with. Or just query by user id used in the app.
-    # The frontend uses Firebase auth, so user ids are dynamic.
-    # But for a specific ticket login, the user types the ticket ID.
-    
-    print("Seeding tickets to Firestore...")
+
+    logger.info("Seeding tickets to Firestore...")
     for ticket in tickets:
         doc_id = ticket.pop("id")
         doc_ref = firestore_client.collection('tickets').document(doc_id)
         doc_ref.set(ticket)
-        print(f"Added ticket ID {doc_id} to event {ticket['event_id']}")
+        logger.info("Added ticket ID %s to event %s", doc_id, ticket["event_id"])
+
 
 if __name__ == "__main__":
+    logging.basicConfig(level="INFO")
     seed_database()

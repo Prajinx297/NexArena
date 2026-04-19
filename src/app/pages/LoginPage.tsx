@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate, Link } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Shield, User, Loader2 } from "lucide-react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
@@ -15,8 +15,13 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   const { setRole: setAuthRole, logout } = useAuth();
+
+  useEffect(() => {
+    document.title = "Login | NexArena";
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +37,12 @@ export function LoginPage() {
       setAuthRole(role);
 
       showToast("Login successful! Redirecting...", "success");
-      navigate(role === "host" ? "/host/events" : "/events", { replace: true });
+      const fallbackPath = role === "host" ? "/host/events" : "/events";
+      const requestedPath = location.state?.from?.pathname;
+      const nextPath = requestedPath && (!requestedPath.startsWith("/host") || role === "host")
+        ? requestedPath
+        : fallbackPath;
+      navigate(nextPath, { replace: true });
     } catch (err: any) {
       if (auth.currentUser) {
         await logout();
@@ -110,16 +120,20 @@ export function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
+                role="alert"
                 className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-center text-sm text-red-400"
               >
                 {error}
               </motion.div>
             ) : null}
 
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form noValidate onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <label className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Email Address</label>
+                <label htmlFor="login-email" className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Email Address</label>
                 <input
+                  id="login-email"
+                  name="email"
+                  aria-label="Email address"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -130,8 +144,11 @@ export function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Password</label>
+                <label htmlFor="login-password" className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>Password</label>
                 <input
+                  id="login-password"
+                  name="password"
+                  aria-label="Password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

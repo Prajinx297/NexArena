@@ -11,13 +11,22 @@ export function useWebSocket<T = unknown>(url: string): UseWebSocketReturn<T> {
   const [data, setData] = useState<T | null>(null);
   const [status, setStatus] = useState<ConnectionState>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
   const retriesRef = useRef(0);
   const maxRetries = 5;
+  const reconnectDelayMs = 3000;
+  const shouldReconnectRef = useRef(true);
   const urlRef = useRef(url);
 
   urlRef.current = url;
 
   const connect = useCallback(() => {
+    if (!urlRef.current) {
+      setStatus('error');
+      console.error('WebSocket URL is not configured');
+      return;
+    }
+
     if (wsRef.current) {
       wsRef.current.close();
     }
@@ -40,24 +49,30 @@ export function useWebSocket<T = unknown>(url: string): UseWebSocketReturn<T> {
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (event) => {
       setStatus('error');
+      console.error('WS error:', event);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setStatus('disconnected');
-      if (retriesRef.current < maxRetries) {
+      if (shouldReconnectRef.current && !event.wasClean && retriesRef.current < maxRetries) {
         retriesRef.current += 1;
-        setTimeout(() => connect(), 3000);
+        reconnectTimeoutRef.current = window.setTimeout(() => connect(), reconnectDelayMs);
       }
     };
   }, []);
 
   useEffect(() => {
+    shouldReconnectRef.current = true;
     connect();
     return () => {
+      shouldReconnectRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+      }
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000, 'Component unmounted');
       }
     };
   }, [connect, url]);

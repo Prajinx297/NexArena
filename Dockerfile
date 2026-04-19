@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+RUN npm install
 
 # Copy everything (including .env with VITE_ variables)
 COPY . .

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate, Link } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { Shield, User, Loader2 } from "lucide-react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { Navbar } from "../components/Navbar";
 import { useAuth } from "../auth/AuthContext";
@@ -10,21 +10,27 @@ import { useToast } from "../context/ToastContext";
 
 export function SignupPage() {
   const [role, setRole] = useState<"fan" | "host">("fan");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
   const { setRole: setAuthRole } = useAuth();
+
+  useEffect(() => {
+    document.title = "Sign Up | NexArena";
+  }, []);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
       return;
     }
 
@@ -38,6 +44,9 @@ export function SignupPage() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      const displayName = name.trim() || (role === "host" ? "Host" : "Fan");
+
+      await updateProfile(user, { displayName });
 
       localStorage.setItem("userRole", role);
       localStorage.setItem("nexarena-role", role);
@@ -45,14 +54,21 @@ export function SignupPage() {
       setAuthRole(role);
 
       showToast("Account created successfully!", "success");
-      navigate(role === "host" ? "/host/events" : "/events", { replace: true });
+      const fallbackPath = role === "host" ? "/host/events" : "/events";
+      const requestedPath = location.state?.from?.pathname;
+      const nextPath = requestedPath && (!requestedPath.startsWith("/host") || role === "host")
+        ? requestedPath
+        : fallbackPath;
+      navigate(nextPath, { replace: true });
     } catch (err: any) {
       console.error("Signup error:", err?.message ?? err);
       const msg = err.code === "auth/email-already-in-use"
         ? "This email is already registered."
         : err.code === "auth/weak-password"
-          ? "Password is too weak. Use at least 8 characters."
-          : err.message || "Failed to create an account.";
+          ? "Password must be at least 6 characters."
+          : err.code === "auth/invalid-email"
+            ? "Please enter a valid email address."
+            : "Something went wrong. Please try again.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -109,16 +125,33 @@ export function SignupPage() {
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
+                role="alert"
                 className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-center text-sm text-red-400"
               >
                 {error}
               </motion.div>
             ) : null}
 
-            <form onSubmit={handleSignup} className="space-y-4">
+            <form noValidate onSubmit={handleSignup} className="space-y-4">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-300">Email Address</label>
+                <label htmlFor="signup-name" className="block text-sm font-medium text-slate-300">Name</label>
                 <input
+                  id="signup-name"
+                  name="name"
+                  aria-label="Full name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white placeholder-slate-500 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  placeholder="Your name"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="signup-email" className="block text-sm font-medium text-slate-300">Email Address</label>
+                <input
+                  id="signup-email"
+                  name="email"
+                  aria-label="Email address"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -128,19 +161,25 @@ export function SignupPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-300">Password</label>
+                <label htmlFor="signup-password" className="block text-sm font-medium text-slate-300">Password</label>
                 <input
+                  id="signup-password"
+                  name="password"
+                  aria-label="Password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white placeholder-slate-500 transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                  placeholder="Minimum 8 characters"
+                  placeholder="Minimum 6 characters"
                 />
               </div>
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-300">Confirm Password</label>
+                <label htmlFor="signup-confirm-password" className="block text-sm font-medium text-slate-300">Confirm Password</label>
                 <input
+                  id="signup-confirm-password"
+                  name="confirmPassword"
+                  aria-label="Confirm password"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

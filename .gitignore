@@ -1,6 +1,11 @@
-node_modules
-backend/serviceAccountKey.json
+node_modules/
+dist/
 .env
-dist
-__pycache__
+.env.local
+.env.production
+backend/serviceAccountKey.json
+__pycache__/
+*.pyc
 .DS_Store
+*.key
+*.pem

@@ -1,31 +1,49 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Calendar, ChevronRight, MapPin, Users } from "lucide-react";
-import { Link, useNavigate } from "react-router";
-import axios from "axios";
+import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
+import { ErrorBanner } from "../components/ErrorBanner";
 import type { Event } from "../types";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { FALLBACK_IMAGE } from "../utils/helpers";
+import { getEvents } from "../utils/api";
 
 export function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [hoveredEvent, setHoveredEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    document.title = "Events | NexArena";
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
     const fetchEvents = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/events`);
-        setEvents(response.data.events);
-        setHoveredEvent(response.data.events?.[0] ?? null);
-      } catch {
+        setError(null);
+        const nextEvents = await getEvents();
+        if (!isMounted) return;
+        setEvents(nextEvents);
+        setHoveredEvent(nextEvents[0] ?? null);
+      } catch (fetchError: any) {
+        if (!isMounted) return;
+        console.error("Failed to fetch events:", fetchError);
+        setError(fetchError?.message ?? "Unable to load events. Please check your connection.");
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
+
     fetchEvents();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (
@@ -45,6 +63,7 @@ export function EventsPage() {
 
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-10 lg:flex-row lg:items-start">
           <section className="flex-1 space-y-8">
+            {error ? <ErrorBanner message={error} /> : null}
             <Link
               to="/"
               className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold"
@@ -107,7 +126,7 @@ export function EventsPage() {
               style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
             >
               <div className="aspect-video overflow-hidden rounded-[26px]">
-                <img src={hoveredEvent.image} alt={hoveredEvent.stadium} className="h-full w-full object-cover" />
+                <img src={hoveredEvent.image} alt={hoveredEvent.stadium} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.src = FALLBACK_IMAGE; }} className="h-full w-full object-cover" />
               </div>
               <h2 className="mt-6 font-display text-3xl font-semibold">{hoveredEvent.stadium}</h2>
               <div className="mt-6 rounded-[24px] border p-4" style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}>
@@ -117,6 +136,7 @@ export function EventsPage() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => navigate(`/dashboard/${hoveredEvent.id}`)}
                 className="mt-6 w-full rounded-2xl px-5 py-4 font-semibold transition hover:brightness-110"
                 style={{ background: "var(--accent)", color: "var(--bg-primary)" }}

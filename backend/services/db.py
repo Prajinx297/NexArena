@@ -1,23 +1,41 @@
+import logging
 import os
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-key_path = os.path.join(current_dir, "..", "serviceAccountKey.json")
+logger = logging.getLogger(__name__)
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(key_path)
+_db_client: firestore.Client | None = None
+
+
+def ensure_firebase_initialized() -> None:
+    if firebase_admin._apps:
+        return
+
+    credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if credentials_path:
+        cred = credentials.Certificate(credentials_path)
+    else:
+        cred = credentials.ApplicationDefault()
+
     firebase_admin.initialize_app(cred)
 
-db = firestore.client()
+
+def get_firestore_client() -> firestore.Client:
+    global _db_client
+    if _db_client is None:
+      ensure_firebase_initialized()
+      _db_client = firestore.client()
+    return _db_client
 
 
 class Database:
-    def __init__(self):
-        self.db = db
+    @property
+    def db(self):
+        return get_firestore_client()
 
     def add_alert(self, title: str, description: str, severity: str = "high", event_id: str = "global", **extra: Any):
         alert_ref = self.db.collection("events").document(event_id).collection("alerts").document()
@@ -25,7 +43,7 @@ class Database:
             "title": title,
             "description": description,
             "severity": severity,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_id": event_id,
             **extra,
         })
@@ -154,7 +172,7 @@ class Database:
 
     def save_preferences(self, uid: str, preferences: Dict[str, Any]):
         pref_ref = self.db.collection("user_preferences").document(uid)
-        pref_ref.set({"uid": uid, **preferences, "updatedAt": datetime.now().isoformat()}, merge=True)
+        pref_ref.set({"uid": uid, **preferences, "updatedAt": datetime.now(timezone.utc).isoformat()}, merge=True)
         return pref_ref.get().to_dict()
 
     def get_preferences(self, uid: str):
