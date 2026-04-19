@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
@@ -49,7 +49,7 @@ export const router = createBrowserRouter([
   {
     path: "/host/events",
     element: (
-      <ProtectedRoute allowedRoles={["host"]}>
+      <ProtectedRoute requiredRole="host">
         <HostEventSelectionPage />
       </ProtectedRoute>
     ),
@@ -61,7 +61,7 @@ export const router = createBrowserRouter([
   {
     path: "/host-dashboard/:eventId",
     element: (
-      <ProtectedRoute allowedRoles={["host"]}>
+      <ProtectedRoute requiredRole="host">
         <HostDashboardPage />
       </ProtectedRoute>
     ),

@@ -2,14 +2,30 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "../../lib/firebase";
-import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const ROLE_STORAGE_KEY = "userRole";
+const LEGACY_ROLE_STORAGE_KEY = "nexarena-role";
+const ASSIGNED_EVENTS_STORAGE_KEY = "nexarena-assigned-events";
+
+const getStoredRole = (): "fan" | "host" => {
+  const savedRole = localStorage.getItem(ROLE_STORAGE_KEY) ?? localStorage.getItem(LEGACY_ROLE_STORAGE_KEY);
+  return savedRole === "host" ? "host" : "fan";
+};
+
+const getStoredAssignedEvents = (): string[] => {
+  try {
+    const savedEvents = localStorage.getItem(ASSIGNED_EVENTS_STORAGE_KEY);
+    return savedEvents ? JSON.parse(savedEvents) : [];
+  } catch {
+    return [];
+  }
+};
 
 interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
-  role: "fan" | "host" | null;
+  role: "fan" | "host";
+  setRole: (role: "fan" | "host") => void;
   assignedEvents: string[];
   refreshUserRole: (user?: User | null, initialRole?: string) => Promise<"fan" | "host">;
   logout: () => Promise<void>;
@@ -24,63 +40,39 @@ export const useAuth = () => {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<"fan" | "host" | null>(null);
-  const [assignedEvents, setAssignedEvents] = useState<string[]>([]);
+  const [role, setRoleState] = useState<"fan" | "host">(() => getStoredRole());
+  const [assignedEvents, setAssignedEvents] = useState<string[]>(() => getStoredAssignedEvents());
+
+  const setRole = (nextRole: "fan" | "host") => {
+    setRoleState(nextRole);
+    localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
+    localStorage.setItem(LEGACY_ROLE_STORAGE_KEY, nextRole);
+  };
 
   const refreshUserRole = async (targetUser: User | null = currentUser, initialRole?: string): Promise<"fan" | "host"> => {
     if (!targetUser) {
-      setRole(null);
+      setRoleState("fan");
       setAssignedEvents([]);
       return "fan";
     }
 
-    try {
-      const token = await targetUser.getIdToken(true);
-      const response = await axios.get(`${API_BASE_URL}/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: initialRole ? { role: initialRole } : {},
-      });
-      const nextRole = response.data.role === "host" ? "host" : "fan";
-      setRole(nextRole);
-      setAssignedEvents(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []);
-      localStorage.setItem("nexarena-role", nextRole);
-      localStorage.setItem("nexarena-assigned-events", JSON.stringify(Array.isArray(response.data.assignedEvents) ? response.data.assignedEvents : []));
-      return nextRole;
-    } catch (err) {
-      console.warn("Backend /me call failed, using fallback role:", err);
-      // Fallback to local state / provided role
-      const fallbackRole: "fan" | "host" = initialRole === "host" 
-        ? "host" 
-        : (localStorage.getItem("nexarena-role") === "host" ? "host" : "fan");
-      
-      setRole(fallbackRole);
-      localStorage.setItem("nexarena-role", fallbackRole);
-      return fallbackRole;
-    }
+    const nextRole: "fan" | "host" = initialRole === "host" ? "host" : getStoredRole();
+    setRole(nextRole);
+    setAssignedEvents(getStoredAssignedEvents());
+    return nextRole;
   };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
       if (user) {
-        try {
-          await refreshUserRole(user);
-        } catch {
-          const cachedRole = localStorage.getItem("nexarena-role");
-          const cachedEvents = localStorage.getItem("nexarena-assigned-events");
-          setRole(cachedRole === "host" ? "host" : "fan");
-          try {
-            setAssignedEvents(cachedEvents ? JSON.parse(cachedEvents) : []);
-          } catch {
-            setAssignedEvents([]);
-          }
-        }
+        await refreshUserRole(user);
       } else {
-        setRole(null);
+        setRoleState("fan");
         setAssignedEvents([]);
-        localStorage.removeItem("nexarena-role");
-        localStorage.removeItem("nexarena-assigned-events");
       }
+
       setLoading(false);
     });
 
@@ -90,14 +82,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await firebaseSignOut(auth);
     localStorage.removeItem("userEmail");
-    localStorage.removeItem("nexarena-role");
-    localStorage.removeItem("nexarena-assigned-events");
+    localStorage.removeItem(ROLE_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_ROLE_STORAGE_KEY);
+    localStorage.removeItem(ASSIGNED_EVENTS_STORAGE_KEY);
+    setRoleState("fan");
+    setAssignedEvents([]);
   };
 
   const value = {
     currentUser,
     loading,
     role,
+    setRole,
     assignedEvents,
     refreshUserRole,
     logout,

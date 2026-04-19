@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown, Landmark, LogOut, Menu, Shield, Ticket, X, Zap } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -20,7 +20,7 @@ function SystemStatusBadge() {
       className="hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] sm:flex"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
     >
-      <span className={`h-2 w-2 rounded-full ${status === "Nominal" ? "bg-emerald-400 animate-pulse" : "bg-amber-300 animate-pulse"}`} />
+      <span className={`h-2 w-2 rounded-full ${status === "Nominal" ? "animate-pulse bg-emerald-400" : "animate-pulse bg-amber-300"}`} />
       {status}
     </div>
   );
@@ -74,7 +74,7 @@ export function Navbar() {
             background: scrolled ? "var(--nav-bg)" : "color-mix(in srgb, var(--nav-bg) 82%, transparent)",
           }}
         >
-          <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
+          <Link to="/" className="flex items-center gap-3 text-left">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-300/10 shadow-[0_10px_30px_rgba(56,189,248,0.18)]">
               <Landmark className="h-5 w-5 text-sky-300" />
             </div>
@@ -82,15 +82,15 @@ export function Navbar() {
               <p className="font-display text-xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>NexArena</p>
               <p className="text-[10px] uppercase tracking-[0.28em]" style={{ color: "var(--text-secondary)" }}>Smart stadium OS</p>
             </div>
-          </button>
+          </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
             {navLinks.map((link) => {
               const isActive = location.pathname === link.to || location.pathname.startsWith(`${link.to}/`);
               return (
-                <button
+                <Link
                   key={link.to}
-                  onClick={() => navigate(link.to)}
+                  to={link.to}
                   className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5"
                   style={{
                     borderColor: isActive ? "var(--border-color)" : "transparent",
@@ -100,7 +100,7 @@ export function Navbar() {
                 >
                   {link.icon}
                   {link.label}
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -112,6 +112,7 @@ export function Navbar() {
             {currentUser ? (
               <div ref={dropdownRef} className="relative">
                 <button
+                  type="button"
                   onClick={() => setDropdownOpen((value) => !value)}
                   className="flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 transition"
                   style={{ borderColor: "var(--border-color)", background: "var(--bg-card)" }}
@@ -137,10 +138,11 @@ export function Navbar() {
                     >
                       <div className="border-b px-4 py-4" style={{ borderColor: "var(--border-color)" }}>
                         <p className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>{currentUser.email}</p>
-                        <p className="mt-1 text-[10px] uppercase tracking-[0.24em]" style={{ color: "var(--text-secondary)" }}>{role ?? "fan"}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-[0.24em]" style={{ color: "var(--text-secondary)" }}>{role}</p>
                       </div>
                       <div className="p-2">
                         <button
+                          type="button"
                           onClick={() => {
                             navigate("/events");
                             setDropdownOpen(false);
@@ -152,6 +154,7 @@ export function Navbar() {
                           Browse events
                         </button>
                         <button
+                          type="button"
                           onClick={handleLogout}
                           className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-red-200 transition hover:bg-red-400/10"
                         >
@@ -173,6 +176,7 @@ export function Navbar() {
             )}
 
             <button
+              type="button"
               onClick={() => setMobileOpen(true)}
               className="rounded-2xl border p-2.5 transition md:hidden"
               style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
@@ -207,9 +211,10 @@ export function Navbar() {
                   <p className="mt-1 text-xs uppercase tracking-[0.24em]" style={{ color: "var(--text-secondary)" }}>NexArena</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setMobileOpen(false)}
-                    className="rounded-2xl border p-2.5 transition"
-                    style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
+                  className="rounded-2xl border p-2.5 transition"
+                  style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -217,18 +222,16 @@ export function Navbar() {
 
               <div className="flex flex-1 flex-col gap-2">
                 {navLinks.map((link) => (
-                  <button
+                  <Link
                     key={link.to}
-                    onClick={() => {
-                      navigate(link.to);
-                      setMobileOpen(false);
-                    }}
+                    to={link.to}
+                    onClick={() => setMobileOpen(false)}
                     className="flex items-center gap-3 rounded-[22px] border px-4 py-3 text-sm font-medium transition"
                     style={{ borderColor: "var(--border-color)", background: "var(--bg-card)", color: "var(--text-primary)" }}
                   >
                     {link.icon}
                     {link.label}
-                  </button>
+                  </Link>
                 ))}
               </div>
 
@@ -236,6 +239,7 @@ export function Navbar() {
                 <ThemeToggle />
                 {currentUser ? (
                   <button
+                    type="button"
                     onClick={() => {
                       handleLogout();
                       setMobileOpen(false);
